@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark"
+    android:gravity="center_horizontal"
+    android:padding="32dp">
+
+    <!-- Spacer top -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="JAW"
+        android:textSize="42sp"
+        android:textColor="@color/green_primary"
+        android:textStyle="bold"
+        android:letterSpacing="0.15"
+        android:fontFamily="sans-serif-black" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MODS"
+        android:textSize="18sp"
+        android:textColor="@color/text_secondary"
+        android:letterSpacing="0.5"
+        android:fontFamily="sans-serif-light"
+        android:layout_marginBottom="12dp" />
+
+    <View
+        android:layout_width="60dp"
+        android:layout_height="2dp"
+        android:background="@color/green_primary"
+        android:layout_marginBottom="32dp" />
+
+    <!-- Status card -->
+    <LinearLayout
+        android:id="@+id/statusCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card"
+        android:padding="20dp"
+        android:gravity="center"
+        android:layout_marginBottom="32dp">
+
+        <!-- Loading spinner (hidden by default) -->
+        <ProgressBar
+            android:id="@+id/progressInject"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:indeterminateTint="@color/green_primary"
+            android:layout_marginBottom="12dp" />
+
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Ready to inject"
+            android:textSize="14sp"
+            android:textColor="@color/text_secondary"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp" />
+    </LinearLayout>
+
+    <!-- Inject button -->
+    <Button
+        android:id="@+id/btnStart"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="INJECT"
+        android:textSize="18sp"
+        android:textColor="#FF0D0D0D"
+        android:textStyle="bold"
+        android:background="@drawable/btn_green"
+        android:letterSpacing="0.1"
+        android:layout_marginBottom="14dp" />
+
+    <!-- Stop button -->
+    <Button
+        android:id="@+id/btnStop"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:text="STOP"
+        android:textSize="14sp"
+        android:textColor="@color/text_secondary"
+        android:background="@drawable/btn_outline_green"
+        android:letterSpacing="0.05"
+        android:visibility="gone" />
+
+    <!-- Spacer bottom -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <!-- Footer -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="jawmods v1.0"
+        android:textSize="11sp"
+        android:textColor="@color/text_hint" />
+
+</LinearLayout>

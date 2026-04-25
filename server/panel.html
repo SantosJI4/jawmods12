@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>JAWMODS — Key Manager</title>
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #141720;
+    --surface2: #1c2030;
+    --border: #252a3a;
+    --green: #00e074;
+    --green-dim: #00803f;
+    --yellow: #f5c542;
+    --red: #ff4d4d;
+    --blue: #4d9fff;
+    --text: #e0e0e0;
+    --text-dim: #6b7280;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+
+  /* ── Login ── */
+  #login-screen {
+    display: flex; align-items: center; justify-content: center; height: 100vh;
+  }
+  .login-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 40px 36px; width: 360px; text-align: center;
+  }
+  .login-box h1 { color: var(--green); font-size: 22px; letter-spacing: 2px; margin-bottom: 8px; }
+  .login-box p  { color: var(--text-dim); margin-bottom: 24px; font-size: 13px; }
+  .login-box input {
+    width: 100%; padding: 10px 14px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); color: var(--text); font-size: 14px; margin-bottom: 14px;
+  }
+  .login-box input:focus { outline: none; border-color: var(--green); }
+  .btn-green {
+    background: var(--green); color: #000; font-weight: 700; border: none;
+    padding: 10px 20px; border-radius: var(--radius); cursor: pointer; transition: opacity .15s;
+  }
+  .btn-green:hover { opacity: .85; }
+  .login-error { color: var(--red); font-size: 12px; margin-top: 10px; }
+
+  /* ── Main layout ── */
+  #app { display: none; }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 14px 28px; display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { color: var(--green); font-size: 18px; letter-spacing: 2px; }
+  header span { color: var(--text-dim); font-size: 12px; }
+  .logout-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 5px 14px; border-radius: var(--radius); cursor: pointer; font-size: 12px;
+    transition: border-color .15s;
+  }
+  .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+  main { padding: 24px 28px; max-width: 1400px; margin: 0 auto; }
+
+  /* ── Stats bar ── */
+  .stats { display: flex; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 20px; flex: 1; min-width: 120px; text-align: center;
+  }
+  .stat-card .val { font-size: 28px; font-weight: 700; }
+  .stat-card .lbl { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+  .stat-card.total .val { color: var(--blue); }
+  .stat-card.active .val { color: var(--green); }
+  .stat-card.paused .val { color: var(--yellow); }
+  .stat-card.expired .val { color: var(--red); }
+
+  /* ── Create section ── */
+  .section {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; margin-bottom: 20px;
+  }
+  .section h2 { font-size: 13px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+  .create-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 5px; }
+  .field label { font-size: 11px; color: var(--text-dim); }
+  .field input, .field select {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 8px 12px; border-radius: var(--radius); font-size: 13px; width: 140px;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--green); }
+  .field.wide input { width: 220px; }
+
+  /* ── Filter row ── */
+  .filter-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+  .filter-row input {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 12px; border-radius: var(--radius); font-size: 13px; width: 260px;
+  }
+  .filter-row input:focus { outline: none; border-color: var(--blue); }
+  .filter-btn {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    padding: 7px 14px; border-radius: var(--radius); cursor: pointer; font-size: 12px;
+    transition: border-color .15s;
+  }
+  .filter-btn.active-filter { border-color: var(--green); color: var(--green); }
+  .filter-btn:hover { border-color: var(--text-dim); }
+
+  /* ── Table ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: var(--surface2); color: var(--text-dim); text-align: left;
+    padding: 10px 12px; font-weight: 500; white-space: nowrap; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border);
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 10px 12px; vertical-align: middle; }
+  .key-val {
+    font-family: monospace; font-size: 12px; color: var(--blue);
+    cursor: pointer; user-select: all;
+  }
+  .key-val:hover { color: var(--green); }
+
+  /* ── Status badge ── */
+  .badge {
+    display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px;
+    font-weight: 600; letter-spacing: .5px;
+  }
+  .badge.active  { background: #00e07422; color: var(--green); border: 1px solid #00e07444; }
+  .badge.paused  { background: #f5c54222; color: var(--yellow); border: 1px solid #f5c54244; }
+  .badge.expired { background: #ff4d4d22; color: var(--red);    border: 1px solid #ff4d4d44; }
+
+  /* ── Remaining bar ── */
+  .rem-bar { background: var(--border); border-radius: 4px; height: 5px; width: 90px; overflow: hidden; }
+  .rem-fill { height: 100%; border-radius: 4px; transition: width .3s; }
+
+  /* ── Action buttons ── */
+  .actions { display: flex; gap: 5px; flex-wrap: nowrap; }
+  .act-btn {
+    border: 1px solid var(--border); background: transparent; color: var(--text);
+    padding: 4px 10px; border-radius: 5px; cursor: pointer; font-size: 11px;
+    white-space: nowrap; transition: all .15s;
+  }
+  .act-btn:hover { background: var(--surface2); }
+  .act-btn.pause  { color: var(--yellow); border-color: #f5c54244; }
+  .act-btn.pause:hover  { background: #f5c54222; }
+  .act-btn.resume { color: var(--green);  border-color: #00e07444; }
+  .act-btn.resume:hover { background: #00e07422; }
+  .act-btn.extend { color: var(--blue);   border-color: #4d9fff44; }
+  .act-btn.extend:hover { background: #4d9fff22; }
+  .act-btn.revoke { color: var(--red);    border-color: #ff4d4d44; }
+  .act-btn.revoke:hover { background: #ff4d4d22; }
+  .act-btn.delete { color: var(--red);    border-color: #ff4d4d44; }
+  .act-btn.delete:hover { background: #ff4d4d33; }
+  .act-btn.hwid   { color: var(--text-dim); border-color: var(--border); }
+  .act-btn.hwid:hover   { color: var(--text); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 28px; right: 28px; padding: 12px 20px;
+    background: var(--surface2); border: 1px solid var(--green); border-radius: var(--radius);
+    color: var(--green); font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity .25s; z-index: 999;
+  }
+  #toast.error { border-color: var(--red); color: var(--red); }
+  #toast.show  { opacity: 1; }
+
+  /* ── Modal extend ── */
+  .modal-bg {
+    position: fixed; inset: 0; background: #0009; display: flex;
+    align-items: center; justify-content: center; z-index: 500; display: none;
+  }
+  .modal-bg.open { display: flex; }
+  .modal {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 28px; width: 340px;
+  }
+  .modal h3 { font-size: 15px; margin-bottom: 6px; }
+  .modal p  { color: var(--text-dim); font-size: 12px; margin-bottom: 18px; }
+  .modal input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: var(--radius); font-size: 14px; margin-bottom: 14px;
+  }
+  .modal input:focus { outline: none; border-color: var(--blue); }
+  .modal-row { display: flex; gap: 10px; }
+  .btn-cancel {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 9px 20px; border-radius: var(--radius); cursor: pointer; flex: 1; font-size: 13px;
+  }
+  .btn-cancel:hover { border-color: var(--text-dim); }
+  .btn-confirm {
+    background: var(--blue); color: #fff; border: none;
+    padding: 9px 20px; border-radius: var(--radius); cursor: pointer; flex: 1; font-size: 13px;
+    font-weight: 600;
+  }
+  .btn-confirm:hover { opacity: .85; }
+
+  .copied-tip { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+  /* ── Generated keys list ── */
+  #gen-keys {
+    margin-top: 16px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px; display: none;
+  }
+  #gen-keys p { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+  #gen-keys .kl { font-family: monospace; font-size: 12px; color: var(--blue); line-height: 1.8; }
+  #gen-keys .copy-all {
+    margin-top: 10px; background: transparent; border: 1px solid var(--border);
+    color: var(--text-dim); padding: 5px 12px; border-radius: var(--radius);
+    cursor: pointer; font-size: 11px;
+  }
+  #gen-keys .copy-all:hover { color: var(--text); }
+
+  .refresh-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    padding: 7px 14px; border-radius: var(--radius); cursor: pointer; font-size: 12px;
+    transition: all .15s; margin-left: auto;
+  }
+  .refresh-btn:hover { border-color: var(--green); color: var(--green); }
+
+  .empty-row td { text-align: center; color: var(--text-dim); padding: 30px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ LOGIN ═══════════════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <h1>JAWMODS</h1>
+    <p>Key Management Panel</p>
+    <input id="token-input" type="password" placeholder="Admin Token" autocomplete="off"/>
+    <br/>
+    <button class="btn-green" onclick="doLogin()">ENTRAR</button>
+    <div class="login-error" id="login-err"></div>
+  </div>
+</div>
+
+<!-- ═══════════════════ APP ═══════════════════ -->
+<div id="app">
+  <header>
+    <h1>⚡ JAWMODS — Keys</h1>
+    <span id="server-url"></span>
+    <button class="logout-btn" onclick="doLogout()">Sair</button>
+  </header>
+
+  <main>
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card total">
+        <div class="val" id="s-total">0</div>
+        <div class="lbl">TOTAL</div>
+      </div>
+      <div class="stat-card active">
+        <div class="val" id="s-active">0</div>
+        <div class="lbl">ATIVAS</div>
+      </div>
+      <div class="stat-card paused">
+        <div class="val" id="s-paused">0</div>
+        <div class="lbl">PAUSADAS</div>
+      </div>
+      <div class="stat-card expired">
+        <div class="val" id="s-expired">0</div>
+        <div class="lbl">EXPIRADAS</div>
+      </div>
+    </div>
+
+    <!-- Create -->
+    <div class="section">
+      <h2>Criar Keys</h2>
+      <div class="create-row">
+        <div class="field">
+          <label>Quantidade</label>
+          <input type="number" id="c-count" value="1" min="1" max="50"/>
+        </div>
+        <div class="field">
+          <label>Duração</label>
+          <select id="c-dur">
+            <option value="1">1 hora</option>
+            <option value="24">1 dia</option>
+            <option value="72">3 dias</option>
+            <option value="168">7 dias</option>
+            <option value="360" selected>15 dias</option>
+            <option value="720">30 dias</option>
+            <option value="2160">90 dias</option>
+            <option value="8760">1 ano</option>
+            <option value="custom">Personalizado</option>
+          </select>
+        </div>
+        <div class="field" id="custom-hours-field" style="display:none">
+          <label>Horas custom</label>
+          <input type="number" id="c-hours" value="48" min="1"/>
+        </div>
+        <div class="field wide">
+          <label>Nota (opcional)</label>
+          <input type="text" id="c-note" placeholder="ex: vip, teste..."/>
+        </div>
+        <button class="btn-green" onclick="createKeys()">Gerar</button>
+      </div>
+      <div id="gen-keys">
+        <p>Keys geradas — clique para copiar individualmente:</p>
+        <div class="kl" id="gen-list"></div>
+        <button class="copy-all" onclick="copyAll()">Copiar todas</button>
+      </div>
+    </div>
+
+    <!-- Keys table -->
+    <div class="section">
+      <h2>Keys cadastradas</h2>
+      <div class="filter-row">
+        <input type="text" id="search" placeholder="Buscar key, nota, hwid..." oninput="renderTable()"/>
+        <button class="filter-btn" id="f-all"     onclick="setFilter('all')">Todas</button>
+        <button class="filter-btn" id="f-active"  onclick="setFilter('active')">Ativas</button>
+        <button class="filter-btn" id="f-paused"  onclick="setFilter('paused')">Pausadas</button>
+        <button class="filter-btn" id="f-expired" onclick="setFilter('expired')">Expiradas</button>
+        <button class="refresh-btn" onclick="loadKeys()">↻ Atualizar</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Status</th>
+              <th>Tempo restante</th>
+              <th>Expira em</th>
+              <th>HWID</th>
+              <th>Nota</th>
+              <th>Criada em</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="keys-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ═══════════════════ MODAL EXTEND ═══════════════════ -->
+<div class="modal-bg" id="extend-modal">
+  <div class="modal">
+    <h3>Alterar tempo</h3>
+    <p id="extend-key-label">Key: —</p>
+    <input type="number" id="extend-hours" placeholder="Horas a adicionar (ex: 72)" min="1"/>
+    <div class="modal-row">
+      <button class="btn-cancel" onclick="closeExtend()">Cancelar</button>
+      <button class="btn-confirm" onclick="confirmExtend()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ───────── Config ─────────
+let TOKEN    = "";
+let BASE_URL = window.location.origin;
+let allKeys  = [];
+let filterStatus = "all";
+let extendTarget = "";
+
+// ───────── Login ─────────
+document.getElementById("token-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") doLogin();
+});
+
+function doLogin() {
+  const t = document.getElementById("token-input").value.trim();
+  if (!t) return;
+  TOKEN = t;
+  document.getElementById("server-url").textContent = BASE_URL;
+  // Testar token
+  fetch(`${BASE_URL}/admin/list`, { headers: { Authorization: "Bearer " + TOKEN } })
+    .then(r => {
+      if (r.status === 401) throw new Error("Token inválido");
+      return r.json();
+    })
+    .then(data => {
+      allKeys = data.keys || [];
+      localStorage.setItem("jaw_token", TOKEN);
+      showApp();
+      renderStats();
+      renderTable();
+      setFilter("all");
+    })
+    .catch(e => {
+      document.getElementById("login-err").textContent = e.message;
+    });
+}
+
+function doLogout() {
+  TOKEN = "";
+  localStorage.removeItem("jaw_token");
+  document.getElementById("app").style.display = "none";
+  document.getElementById("login-screen").style.display = "flex";
+  document.getElementById("token-input").value = "";
+}
+
+function showApp() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+}
+
+// Auto-login
+window.addEventListener("DOMContentLoaded", () => {
+  const saved = localStorage.getItem("jaw_token");
+  if (saved) {
+    document.getElementById("token-input").value = saved;
+    doLogin();
+  }
+});
+
+// ───────── Duration select ─────────
+document.getElementById("c-dur").addEventListener("change", function() {
+  document.getElementById("custom-hours-field").style.display =
+    this.value === "custom" ? "flex" : "none";
+});
+
+// ───────── Load keys ─────────
+function loadKeys() {
+  fetch(`${BASE_URL}/admin/list`, { headers: { Authorization: "Bearer " + TOKEN } })
+    .then(r => r.json())
+    .then(data => {
+      allKeys = data.keys || [];
+      renderStats();
+      renderTable();
+      showToast("Atualizado");
+    })
+    .catch(() => showToast("Erro ao carregar", true));
+}
+
+// ───────── Stats ─────────
+function renderStats() {
+  const total   = allKeys.length;
+  const active  = allKeys.filter(k => k.status === "active").length;
+  const paused  = allKeys.filter(k => k.status === "paused").length;
+  const expired = allKeys.filter(k => k.status === "expired").length;
+  document.getElementById("s-total").textContent   = total;
+  document.getElementById("s-active").textContent  = active;
+  document.getElementById("s-paused").textContent  = paused;
+  document.getElementById("s-expired").textContent = expired;
+}
+
+// ───────── Filter ─────────
+function setFilter(f) {
+  filterStatus = f;
+  ["all","active","paused","expired"].forEach(x => {
+    document.getElementById("f-"+x).classList.toggle("active-filter", x === f);
+  });
+  renderTable();
+}
+
+// ───────── Table ─────────
+function renderTable() {
+  const search = document.getElementById("search").value.toLowerCase();
+  let rows = allKeys.filter(k => {
+    const matchFilter = filterStatus === "all" || k.status === filterStatus;
+    const matchSearch = !search ||
+      k.key_value.toLowerCase().includes(search) ||
+      (k.note || "").toLowerCase().includes(search) ||
+      (k.hwid || "").toLowerCase().includes(search);
+    return matchFilter && matchSearch;
+  });
+
+  const tbody = document.getElementById("keys-body");
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="8">Nenhuma key encontrada</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(k => {
+    const badge = `<span class="badge ${k.status}">${k.status === "active" ? "ATIVA" : k.status === "paused" ? "PAUSADA" : "EXPIRADA"}</span>`;
+    const rem   = formatRemaining(k.remaining_seconds);
+    const remBar = k.status === "active"
+      ? `<div class="rem-bar"><div class="rem-fill" style="width:${remPercent(k)}%;background:${remColor(k)}"></div></div><span style="font-size:11px;color:var(--text-dim);margin-top:3px">${rem}</span>`
+      : `<span style="font-size:11px;color:var(--text-dim)">—</span>`;
+    const hwid  = k.hwid ? `<span title="${k.hwid}" style="font-family:monospace;font-size:11px;color:var(--text-dim)">${k.hwid.slice(0,10)}…</span>` : `<span style="color:var(--text-dim)">—</span>`;
+    const exp   = k.expires_at ? k.expires_at.slice(0,16).replace("T"," ") : "—";
+    const cre   = k.created_at ? k.created_at.slice(0,16).replace("T"," ") : "—";
+    const pauseBtn = k.status !== "expired"
+      ? (k.status === "paused"
+          ? `<button class="act-btn resume" onclick="resumeKey('${k.key_value}')">▶ Retomar</button>`
+          : `<button class="act-btn pause"  onclick="pauseKey('${k.key_value}')">⏸ Pausar</button>`)
+      : "";
+
+    return `<tr>
+      <td><span class="key-val" onclick="copyKey('${k.key_value}')" title="Clique para copiar">${k.key_value}</span></td>
+      <td>${badge}</td>
+      <td style="display:flex;flex-direction:column;gap:2px">${remBar}</td>
+      <td style="font-size:12px;color:var(--text-dim)">${exp}</td>
+      <td>${hwid}</td>
+      <td style="color:var(--text-dim);font-size:12px">${k.note || "—"}</td>
+      <td style="font-size:12px;color:var(--text-dim)">${cre}</td>
+      <td>
+        <div class="actions">
+          ${pauseBtn}
+          <button class="act-btn extend" onclick="openExtend('${k.key_value}')">⏱ Tempo</button>
+          <button class="act-btn revoke" onclick="revokeKey('${k.key_value}')">⛔ Revogar</button>
+          <button class="act-btn hwid"   onclick="resetHwid('${k.key_value}')">🔁 HWID</button>
+          <button class="act-btn delete" onclick="deleteKey('${k.key_value}')">🗑</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function formatRemaining(sec) {
+  if (!sec || sec <= 0) return "Expirado";
+  if (sec < 60) return `${sec}s`;
+  if (sec < 3600) return `${Math.floor(sec/60)}m`;
+  if (sec < 86400) return `${Math.floor(sec/3600)}h ${Math.floor((sec%3600)/60)}m`;
+  return `${Math.floor(sec/86400)}d ${Math.floor((sec%86400)/3600)}h`;
+}
+
+function remPercent(k) {
+  if (!k.remaining_seconds || !k.duration_hours) return 0;
+  return Math.min(100, (k.remaining_seconds / (k.duration_hours * 3600)) * 100);
+}
+
+function remColor(k) {
+  const p = remPercent(k);
+  if (p > 50) return "var(--green)";
+  if (p > 20) return "var(--yellow)";
+  return "var(--red)";
+}
+
+// ───────── Create keys ─────────
+function createKeys() {
+  const count = parseInt(document.getElementById("c-count").value) || 1;
+  const durSel = document.getElementById("c-dur").value;
+  const hours  = durSel === "custom"
+    ? parseInt(document.getElementById("c-hours").value) || 24
+    : parseInt(durSel);
+  const note = document.getElementById("c-note").value.trim();
+
+  fetch(`${BASE_URL}/admin/generate`, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ count, duration_hours: hours, note })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.error) return showToast(data.error, true);
+    const keys = data.keys || [];
+    const box  = document.getElementById("gen-keys");
+    const list = document.getElementById("gen-list");
+    box.style.display = "block";
+    list.innerHTML = keys.map(k =>
+      `<div onclick="copyKey('${k}')" style="cursor:pointer" title="Copiar">${k}</div>`
+    ).join("");
+    showToast(`${keys.length} key(s) criada(s)!`);
+    loadKeys();
+  })
+  .catch(() => showToast("Erro ao criar keys", true));
+}
+
+function copyAll() {
+  const keys = Array.from(document.getElementById("gen-list").querySelectorAll("div"))
+    .map(d => d.textContent).join("\n");
+  navigator.clipboard.writeText(keys).then(() => showToast("Todas copiadas!"));
+}
+
+// ───────── Actions ─────────
+function api(route, body) {
+  return fetch(`${BASE_URL}/admin/${route}`, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  }).then(r => r.json());
+}
+
+function pauseKey(k) {
+  api("pause", { key: k }).then(d => {
+    if (d.error) return showToast(d.error, true);
+    showToast(`Key pausada`);
+    updateLocalKey(k, { status: "paused", remaining_seconds: 0 });
+  });
+}
+
+function resumeKey(k) {
+  api("resume", { key: k }).then(d => {
+    if (d.error) return showToast(d.error, true);
+    showToast(`Key retomada`);
+    loadKeys();
+  });
+}
+
+function revokeKey(k) {
+  if (!confirm(`Revogar key ${k}?`)) return;
+  api("revoke", { key: k }).then(d => {
+    if (d.error) return showToast(d.error, true);
+    showToast(`Key revogada`);
+    updateLocalKey(k, { status: "expired", remaining_seconds: 0 });
+  });
+}
+
+function deleteKey(k) {
+  if (!confirm(`EXCLUIR permanentemente a key ${k}?`)) return;
+  api("delete", { key: k }).then(d => {
+    if (d.error) return showToast(d.error, true);
+    showToast(`Key excluída`);
+    allKeys = allKeys.filter(x => x.key_value !== k);
+    renderStats();
+    renderTable();
+  });
+}
+
+function resetHwid(k) {
+  if (!confirm(`Resetar HWID da key ${k}? O dispositivo poderá ser trocado.`)) return;
+  api("reset_hwid", { key: k }).then(d => {
+    if (d.error) return showToast(d.error, true);
+    showToast(`HWID resetado`);
+    updateLocalKey(k, { hwid: null, used: 0 });
+  });
+}
+
+// ── Extend modal ──
+function openExtend(k) {
+  extendTarget = k;
+  document.getElementById("extend-key-label").textContent = "Key: " + k;
+  document.getElementById("extend-hours").value = "";
+  document.getElementById("extend-modal").classList.add("open");
+}
+
+function closeExtend() {
+  extendTarget = "";
+  document.getElementById("extend-modal").classList.remove("open");
+}
+
+function confirmExtend() {
+  const hours = parseInt(document.getElementById("extend-hours").value);
+  if (!hours || hours < 1) return showToast("Informe um valor válido", true);
+  api("extend", { key: extendTarget, hours }).then(d => {
+    if (d.error) return showToast(d.error, true);
+    showToast(`+${hours}h adicionadas`);
+    closeExtend();
+    loadKeys();
+  });
+}
+
+document.getElementById("extend-modal").addEventListener("click", e => {
+  if (e.target === document.getElementById("extend-modal")) closeExtend();
+});
+
+// ── Helpers ──
+function updateLocalKey(k, patch) {
+  const idx = allKeys.findIndex(x => x.key_value === k);
+  if (idx >= 0) Object.assign(allKeys[idx], patch);
+  renderStats();
+  renderTable();
+}
+
+function copyKey(k) {
+  navigator.clipboard.writeText(k).then(() => showToast("Copiado: " + k));
+}
+
+let toastTimer;
+function showToast(msg, error = false) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "show" + (error ? " error" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = "", 2500);
+}
+
+// Auto-refresh 30s
+setInterval(() => { if (TOKEN) loadKeys(); }, 30000);
+</script>
+</body>
+</html>

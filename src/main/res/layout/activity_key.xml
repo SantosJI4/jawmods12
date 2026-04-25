@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark"
+    android:gravity="center"
+    android:padding="32dp">
+
+    <!-- Logo / Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="JAW"
+        android:textSize="48sp"
+        android:textColor="@color/green_primary"
+        android:textStyle="bold"
+        android:letterSpacing="0.15"
+        android:fontFamily="sans-serif-black" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="MODS"
+        android:textSize="22sp"
+        android:textColor="@color/text_secondary"
+        android:letterSpacing="0.5"
+        android:fontFamily="sans-serif-light"
+        android:layout_marginBottom="48dp" />
+
+    <!-- Key Card -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Enter your license key"
+            android:textSize="14sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginBottom="16dp" />
+
+        <EditText
+            android:id="@+id/etKey"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/bg_input"
+            android:hint="JAWM-XXXX-XXXX-XXXX"
+            android:textColorHint="@color/text_hint"
+            android:textColor="@color/text_primary"
+            android:textSize="16sp"
+            android:inputType="textCapCharacters"
+            android:maxLines="1"
+            android:singleLine="true"
+            android:paddingLeft="16dp"
+            android:paddingRight="16dp"
+            android:fontFamily="monospace"
+            android:gravity="center"
+            android:layout_marginBottom="20dp" />
+
+        <!-- Status message -->
+        <TextView
+            android:id="@+id/tvKeyStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="@color/red_error"
+            android:gravity="center"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Loading spinner -->
+        <ProgressBar
+            android:id="@+id/progressKey"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:visibility="gone"
+            android:indeterminateTint="@color/green_primary"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Validate button -->
+        <Button
+            android:id="@+id/btnValidate"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:text="ACTIVATE"
+            android:textSize="16sp"
+            android:textColor="#FF0D0D0D"
+            android:textStyle="bold"
+            android:background="@drawable/btn_green"
+            android:letterSpacing="0.1" />
+
+    </LinearLayout>
+
+    <!-- Footer -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="jawmods.com"
+        android:textSize="12sp"
+        android:textColor="@color/text_hint"
+        android:layout_marginTop="32dp" />
+
+</LinearLayout>

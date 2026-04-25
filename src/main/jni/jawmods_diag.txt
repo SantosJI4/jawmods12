@@ -1,0 +1,9 @@
+=== JAWMODS DIAG v17-stealth ===
+PID=23529
+SELinux:
+Enforcing
+SHM magic:
+    00000000
+Logcat injector:
+HookLog:
+Injector result: === JawMods ptrace injector v15 === Config: PID=23529 SO=/data/app/~~O7v5yGsSulKx7qhHxPZ__g==/com.dts.freefireth-2-Z_3yLHgsDW1wTZYfmMRQ==/lib/arm64/libgl2.so [*] Target PID: 23529 [*] Library: /data/app/~~O7v5yGsSulKx7qhHxPZ__g==/com.dts.freefireth-2-Z_3yLHgsDW1wTZYfmMRQ==/lib/arm64/libgl2.so [1] Attaching to process...   Attached to main thread 23529 [2] Saving registers... [3] Resolving dlopen...   Linker: /apex/com.android.runtime/bin/linker64   __loader_dlopen (ELF): remote=78b14611b0 (load_base=78b142a000 + st_value=371b0) rxp_base=78b1461000 from /apex/com.android.runtime/bin/linker64   dlopen at: 0x78b14611b0   dlopen code: [0]=a9bc7bfd [1]=f9000bf7 [4] Writing path to target stack...   Path written at: 0x7ff7a44970 (101 bytes) [5] Setting up dlopen call (loader_variant=1)...   caller_addr (x2) = 0x77378fb000 [6] Executing dlopen in target...   Process stopped by signal 11   after: x0=77718a6000 pc=0 sp=7ff7a42f90   dlopen handle: 0x77718a6000 (SUCCESS — pc=0 trap) [7] Restoring original registers... [8] Detaching... [+] INJECTION SUCCESSFUL into PID 23529 ERROR:   WARNING: .so NOT found in /proc/23529/maps after SUCCESS! ERROR:   dlopen handle may be invalid or .so already unloaded [+] Verified: .so in /proc/23529/maps (2 entries) [+] INJECTION SUCCESSFUL
