@@ -324,8 +324,6 @@ static uintptr_t resolveElfSymbol(uintptr_t loadBase, const char *symName) {
 #define OFF_get_position            0x9C5C0F4
 #define OFF_Transform_get_eulerAngles 0x0
 #define OFF_Transform_set_eulerAngles 0x0
-#define OFF_SyncStartFire           0x0
-#define OFF_SyncStopFire            0x0
 #define OFF_Screen_get_width        0x9C14D60
 #define OFF_Screen_get_height       0x9C14D88
 #define OFF_IsLocalPlayer           0x67558A4
@@ -441,8 +439,6 @@ static bool  (*fn_IsCrouching)(void* player, void* method) = nullptr;  // agacha
 static bool  (*fn_get_IsDieing)(void* player, void* method)= nullptr;  // derrubado/sangrando
 // IsFiring â€” Player::IsFiring() (v44)
 static bool (*fn_IsFiring)(void* self, void* method) = nullptr;
-// Speed hack â€” PlayerAttributes::GetWeaponRunSpeedScale(int) (v41)
-static float (*orig_GetWeaponRunSpeedScale)(void* self, int32_t weaponType, void* method) = nullptr;
 // â”€â”€ Player Hacks (v49) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // NickName â€” Player::get_NickName() â€” sÃ³ chamado, nÃ£o hookeado
 static void* (*fn_get_NickName)(void* self, void* method) = nullptr;
@@ -1103,9 +1099,6 @@ void* hack_thread(void*) {
     fn_GetHeadTF      = RESOLVE_OFFSET(void*(*)(void*, void*),             OFF_GetHeadTF);
     fn_IsCrouching    = RESOLVE_OFFSET(bool(*)(void*, void*),              OFF_IsCrouching);
     fn_get_IsDieing   = RESOLVE_OFFSET(bool(*)(void*, void*),              OFF_get_IsDieing);
-    // Auto Aim (fix4) â€” SyncStartFire e SyncStopFire da PlayerNetwork
-    fn_SyncStartFire  = RESOLVE_OFFSET(SyncStartFireFn, OFF_SyncStartFire);
-    fn_SyncStopFire   = RESOLVE_OFFSET(SyncStopFireFn,  OFF_SyncStopFire);
     // Player Hacks (v49) â€” get_NickName sÃ³ chamado (nÃ£o hookeado)
     fn_get_NickName   = RESOLVE_OFFSET(void*(*)(void*, void*),             OFF_get_NickName);
     // Speed Hack â€” resolvido via VmtHook em UpdateVelocity (ver adiante)
