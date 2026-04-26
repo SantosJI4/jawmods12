@@ -1085,8 +1085,10 @@ void* hack_thread(void*) {
     fn_get_CurHP               = RESOLVE_OFFSET(int(*)(void*, void*),               OFF_get_CurHP);
     fn_get_MaxHP               = RESOLVE_OFFSET(int(*)(void*, void*),               OFF_get_MaxHP);
     // Aim Assist
-    fn_get_eulerAngles         = RESOLVE_OFFSET(Vector3(*)(void*, void*),           OFF_Transform_get_eulerAngles);
-    fn_set_eulerAngles         = RESOLVE_OFFSET(void(*)(void*, Vector3, void*),     OFF_Transform_set_eulerAngles);
+    fn_get_eulerAngles = OFF_Transform_get_eulerAngles
+        ? RESOLVE_OFFSET(Vector3(*)(void*, void*),       OFF_Transform_get_eulerAngles) : nullptr;
+    fn_set_eulerAngles = OFF_Transform_set_eulerAngles
+        ? RESOLVE_OFFSET(void(*)(void*, Vector3, void*), OFF_Transform_set_eulerAngles) : nullptr;
     fn_GetBoneTransform        = RESOLVE_OFFSET(void*(*)(void*, int32_t, void*),    OFF_Animator_GetBoneTransform);
     fn_get_HeadCollider              = RESOLVE_OFFSET(void*(*)(void*, void*),             OFF_get_HeadCollider);
     fn_Collider_get_bounds_Injected  = RESOLVE_OFFSET(void(*)(void*, BoundsVal*, void*),  OFF_Collider_get_bounds_Injected);
