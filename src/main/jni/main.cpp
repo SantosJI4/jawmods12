@@ -145,6 +145,7 @@ static float aimbotSmooth     = 0.0f;
 static bool aimbotIgnoreKnocked = true;
 static bool aimbotThroughWalls  = false;
 static bool aimbotAlwaysTrack   = false;
+static bool magicBulletEnabled  = false;
 static bool showFovCircle       = true;
 static int32_t triggerKey       = 0;
 
@@ -285,6 +286,7 @@ void DrawESP(int screenW, int screenH) {
     sharedData->aimbotThroughWalls    = aimbotThroughWalls ? 1 : 0;
     sharedData->aimbotAlwaysTrack     = aimbotAlwaysTrack ? 1 : 0;
     sharedData->triggerKey            = triggerKey;
+    sharedData->magicBulletEnabled    = magicBulletEnabled ? 1 : 0;
 
     if (!esp) return;
     if (sharedData->magic != 0xDEADF00D) return;
@@ -507,7 +509,7 @@ static void readHookLog() {
 // Config â€” persiste em /data/local/tmp/.jawmods_cfg
 // ============================================================
 #define JAW_CONFIG_PATH  "/data/local/tmp/.jawmods_cfg"
-#define JAW_CONFIG_MAGIC 0x4A41570Cu  // "JAW" v12 - advanced aimbot
+#define JAW_CONFIG_MAGIC 0x4A41570Du  // "JAW" v13 - magic bullet
 
 #pragma pack(push, 1)
 struct JawConfig {
@@ -521,6 +523,7 @@ struct JawConfig {
     uint8_t  aimbotIgnoreKnocked, aimbotThroughWalls, aimbotAlwaysTrack;
     int32_t  triggerKey;
     uint8_t  showFovCircle;
+    uint8_t  magicBullet;
 };
 #pragma pack(pop)
 
@@ -543,6 +546,7 @@ static void saveConfig() {
     c.aimbotAlwaysTrack  = aimbotAlwaysTrack;
     c.triggerKey         = triggerKey;
     c.showFovCircle      = showFovCircle;
+    c.magicBullet        = magicBulletEnabled;
     int fd = open(JAW_CONFIG_PATH, O_CREAT | O_WRONLY | O_TRUNC, 0666);
     if (fd >= 0) { write(fd, &c, sizeof(c)); close(fd); }
 }
@@ -570,6 +574,7 @@ static void loadConfig() {
     aimbotAlwaysTrack   = c.aimbotAlwaysTrack;
     triggerKey          = c.triggerKey;
     showFovCircle       = c.showFovCircle;
+    magicBulletEnabled  = c.magicBullet;
 }
 
 // ============================================================
@@ -1000,6 +1005,8 @@ void DrawMenu() {
         ToggleRow("Ignorar Knocked", &aimbotIgnoreKnocked);
         ImGui::Spacing();
         ToggleRow("Atravessar Paredes", &aimbotThroughWalls);
+        ImGui::Spacing();
+        ToggleRow("Magic Bullet", &magicBulletEnabled);
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•

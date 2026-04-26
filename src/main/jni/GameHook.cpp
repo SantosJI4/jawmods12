@@ -599,6 +599,7 @@ static Vector3 g_aimbotLockedHeadPos{};           // Ãºltima posiÃ§Ã£o vÃ
 static bool    g_aimbotHasLock       = false;     // true = aimbot travado num alvo
 static float   g_aimbotBestDist      = 1e9f;      // melhor candidato deste frame
 static bool    g_aimbotJustLocked    = false;     // true = primeiro frame de novo lock -> snap instantaneo
+static bool    g_wasFiring          = false;     // estado anterior de IsFiring (detectar borda de disparo)
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // ============================================================
@@ -654,10 +655,33 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
         }
         bool shouldAim = sharedData->aimbotAlwaysTrack || triggerActive;
 
+        // Magic Bullet: detectar borda de disparo (false->true) e snap instantaneo para cabeca
+        bool isFiringNow  = fn_IsFiring ? fn_IsFiring(self, nullptr) : false;
+        bool firingEdge   = isFiringNow && !g_wasFiring;
+        g_wasFiring       = isFiringNow;
+
         // Busy-guard: nao mover mira durante granada ou skill ativa (gelo, etc.)
         bool isBusy = false;
         if (fn_get_IsGrenadeStart    && fn_get_IsGrenadeStart(self, nullptr))    isBusy = true;
         if (fn_get_IsRunningActSkill && fn_get_IsRunningActSkill(self, nullptr)) isBusy = true;
+
+        // Magic Bullet: snap para cabeca no frame exato do inicio do disparo
+        // Independe do smooth/alwaysTrack -- garante hit na cabeca ao atirar
+        // Ativa somente se: aimbot ligado + tem lock + nao busy + firingEdge
+        if (firingEdge && sharedData->magicBulletEnabled && sharedData->aimbotEnabled &&
+            g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position && !isBusy) {
+            Vector3 mbCamPos = fn_get_position(g_camTransform, nullptr);
+            if (!std::isnan(mbCamPos.x) && !std::isnan(mbCamPos.y) && !std::isnan(mbCamPos.z)) {
+                float mbDx = g_aimbotLockedHeadPos.x - mbCamPos.x;
+                float mbDy = g_aimbotLockedHeadPos.y - mbCamPos.y;
+                float mbDz = g_aimbotLockedHeadPos.z - mbCamPos.z;
+                float mbLen = sqrtf(mbDx*mbDx + mbDy*mbDy + mbDz*mbDz);
+                if (mbLen >= 0.1f) {
+                    Quaternion mbQ = LookQuatFromDir(mbDx, mbDy, mbDz);
+                    fn_SetAimRotation(self, mbQ, true, nullptr);
+                }
+            }
+        }
 
         if (g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position &&
             sharedData->aimbotEnabled && shouldAim && !isBusy) {
