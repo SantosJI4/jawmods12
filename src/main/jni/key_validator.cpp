@@ -518,11 +518,11 @@ void submitKey(const char* key) {
     pthread_detach(t);
 }
 
-// Verifica arquivo de key a cada 2s (chamado do DrawKeyUI)
+// Verifica arquivo de key com intervalo largo (menos open/stat no storage)
 static void checkKeyFile() {
     static long long lastCheck = 0;
     long long now = (long long)time(nullptr);
-    if (now - lastCheck < 2) return;
+    if (now - lastCheck < 5) return;
     lastCheck = now;
     KeyState st = g_keyState.load();
     if (st == KeyState::VALIDATING || st == KeyState::VALID) return;

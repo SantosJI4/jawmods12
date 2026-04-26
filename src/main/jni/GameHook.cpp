@@ -1594,9 +1594,11 @@ bool g_hookStarted = false;
 int g_zygisk_shm_fd = -1;
 #endif
 
-// lib_main() Ã© o entry point para injeÃ§Ã£o via ptrace (libgl2.so).
-// Em modo Zygisk, o entry point Ã© postAppSpecialize() em zygisk_main.cpp.
+// lib_main() — entry ptrace / dlopen legado (APENAS lib gl2 ROOT, sem NOROOT_BUILD).
+// NOROOT / UNIFIED: inject.cpp (JNI_OnLoad + inj_startupThread) é o único entry —
+// evita dois constructors competindo por g_hookStarted e duplicação de /proc + unlink.
 #ifndef ZYGISK_BUILD
+#if !defined(NOROOT_BUILD)
 __attribute__((constructor))
 void lib_main() {
     LOGI("lib_main() LOADED [%s] pid=%d uid=%d", HOOK_BUILD_VER, getpid(), getuid());
@@ -1653,6 +1655,7 @@ void lib_main() {
     pthread_create(&t, nullptr, hack_thread, nullptr);
     pthread_detach(t);
 }
+#endif // !NOROOT_BUILD
 #endif // ZYGISK_BUILD
 
 // ============================================================

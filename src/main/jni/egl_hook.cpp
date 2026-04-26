@@ -160,7 +160,8 @@ static void* inputReaderThread(void*) {
                 g_touchEvent.store(2); // MOVE
             }
         }
-        if (!anyRead) usleep(4000);
+        // ~60 Hz quando ocioso — menos read()/syscall que 4ms em loop apertado
+        if (!anyRead) usleep(16666);
     }
 
     if (touchFd >= 0) close(touchFd);
@@ -276,7 +277,7 @@ static EGLBoolean hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         }
     }
 
-    // Atualizar tamanho da tela (rotação)
+    // Sempre atualizar dimensões (leve) — necessário antes do fast-path de lobby
     {
         int w = 0, h = 0;
         eglQuerySurface(dpy, surface, EGL_WIDTH, &w);
@@ -287,21 +288,29 @@ static EGLBoolean hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         }
     }
 
-    ImGuiIO& io = ImGui::GetIO();
+    const bool keyValid = isKeyValid();
+    const bool inMatch = sharedData && sharedData->magic == 0xDEADF00D
+                         && sharedData->playerCount > 0;
 
-    // ── Processar touch ──────────────────────────────────────────────────────
+    // Touch: triple-tap do menu precisa ser processado mesmo no fast-path
     int tevt = g_touchEvent.exchange(-1);
     float tx  = g_touchX.load();
     float ty  = g_touchY.load();
+    if (tevt == 0) {
+        handleMenuToggle(tx, ty);
+    }
 
     bool menuOpen = g_menuOpen.load();
-    bool keyValid = isKeyValid();
+
+    // Fast-path: key OK, menu fechado, fora de partida — sem ImGui/GL state churn.
+    // Reduz drasticamente assinatura de hook (glGet*, blend, ImGui) no lobby.
+    if (keyValid && !menuOpen && !inMatch) {
+        return orig_eglSwapBuffers(dpy, surface);
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
 
     if (tevt == 0) { // TOUCH DOWN
-        // Verificar triple-tap no canto (SEMPRE, independente do estado)
-        handleMenuToggle(tx, ty);
-
-        // Alimentar ImGui apenas se menu aberto ou tela de key
         if (menuOpen || !keyValid) {
             io.AddMousePosEvent(tx, ty);
             io.AddMouseButtonEvent(0, true);
@@ -331,33 +340,17 @@ static EGLBoolean hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     // ── Desenhar conteúdo ──────────────────────────────────────────────────────
     if (!keyValid) {
-        // Tela de validação de key
         DrawKeyUI();
     } else {
-        // Detectar se estamos numa partida real (há jogadores no campo de visão)
-        bool inMatch = sharedData && sharedData->magic == 0xDEADF00D
-                       && sharedData->playerCount > 0;
-
-        // ESP só renderiza em partida ativa — no lobby não há jogadores inimigos
-        // e renderizar lá seria apenas exposição desnecessária
         if (inMatch) {
             DrawESP(g_screenW, g_screenH);
         }
 
-        // Menu sempre disponível quando key válida (independente de estar em partida)
         if (g_menuOpen.load()) {
             DrawMenu();
-        } else {
-            // Indicador sutil de "mod ativo" no canto superior direito
-            ImDrawList* dl = ImGui::GetForegroundDrawList();
-            float px = (float)g_screenW - 14.0f;
-            float py = 14.0f;
-            static float ph = 0.0f;
-            ph += io.DeltaTime * 2.0f;
-            float alpha = 0.4f + 0.4f * sinf(ph);
-            dl->AddCircleFilled(ImVec2(px, py), 5.0f,
-                IM_COL32(130, 60, 255, (int)(alpha * 255)));
         }
+        // Indicador removido no lobby: qualquer overlay persistente no swap chain
+        // aumenta superfície de detecção; menu/ESP só quando necessário.
     }
 
     // ── Render ────────────────────────────────────────────────────────────────

@@ -45,7 +45,6 @@
 #include <cstdlib>
 #include <fcntl.h>
 #include <sys/prctl.h>
-#include <sys/ptrace.h>
 #include <android/log.h>
 
 #include "obfuscate.h"
@@ -139,25 +138,27 @@ static void* inj_startupThread(void*) {
     // Camuflar nome da thread
     prctl(PR_SET_NAME, (char*)OBFUSCATE("HeapTaskDaemon"), 0, 0, 0);
 
-    // Pequeno delay para garantir que o processo está totalmente inicializado
-    // Importante no modo no-root: libgl2.so carrega antes do Unity inicializar
-    usleep(500000); // 500ms
+    // Delay: menos agressivo que spin imediato; jitter reduz fingerprint de timing
+    usleep(400000 + (useconds_t)(getpid() & 0xFF) * 500);
 
-    // Verificação de segurança (pode ser bypassada em emuladores)
+#ifdef UNIFIED_BUILD
+    // JNI_OnLoad já validou ambiente — evita segunda leitura de /proc/self/maps (Frida)
+    // que alguns ACs correlacionam com cheat frameworks.
+#else
     if (inj_isBeingDebugged() || inj_detectFrida()) {
         ILOG("inj_startupThread: ambiente inseguro, abortando");
         return nullptr;
     }
+#endif
 
     if (!inj_isGameProcess()) {
         ILOG("inj_startupThread: processo incorreto, abortando");
         return nullptr;
     }
 
-    // Iniciar o hack principal
     if (!g_hookStarted) {
         g_hookStarted = true;
-        hack_thread(nullptr); // executa em linha (já estamos em thread separada)
+        hack_thread(nullptr);
     }
     return nullptr;
 }
@@ -215,18 +216,13 @@ __attribute__((constructor))
 static void inj_constructor() {
     ILOG("inj_constructor: pid=%d uid=%d", getpid(), getuid());
 
-    // Anti-debug: se debugger ativo, não inicializar
-    // (verifica via ptrace — técnica diferente do TracerPid para redundância)
-    if (ptrace(PTRACE_TRACEME, 0, nullptr, nullptr) < 0) {
-        // ptrace retornou erro = já existe um tracer = sendo debugado
-        return;
-    }
-    // ptrace funcionou = não há debugger. Revogar para não bloquear uso legítimo.
-    ptrace(PTRACE_DETACH, 0, nullptr, nullptr);
-
-    // Verificação de Frida
-    if (inj_detectFrida()) return;
-
+#ifdef UNIFIED_BUILD
+    // UNIFIED: JNI_OnLoad já é o entry canônico (ordem vs lib_main era indefinida).
+    // Evita ptrace duplicado, segunda thread e fingerprint de inicialização dupla.
+    (void)0;
+#else
+    // NÃO usar PTRACE_TRACEME aqui: anti-cheats e kernels marcam o processo por syscall ptrace.
+    if (inj_isBeingDebugged() || inj_detectFrida()) return;
     if (!inj_isGameProcess()) return;
 
     if (!g_hookStarted) {
@@ -235,6 +231,7 @@ static void inj_constructor() {
         pthread_create(&t, nullptr, inj_startupThread, nullptr);
         pthread_detach(t);
     }
+#endif
 }
 #endif // NOROOT_BUILD
 
