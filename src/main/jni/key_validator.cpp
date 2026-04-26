@@ -110,9 +110,55 @@ static std::string jstr2str(JNIEnv* env, jstring js) {
     return s;
 }
 
-// Obtém o contexto
 
+static jobject getAppContext(JNIEnv* env) {
+    jclass clsAT = env->FindClass("android/app/ActivityThread");
+    if (!clsAT) return nullptr;
+    jmethodID midCAT = env->GetStaticMethodID(clsAT, "currentActivityThread",
+                                               "()Landroid/app/ActivityThread;");
+    if (!midCAT) { env->DeleteLocalRef(clsAT); return nullptr; }
+    jobject at = env->CallStaticObjectMethod(clsAT, midCAT);
+    if (!at) { env->DeleteLocalRef(clsAT); return nullptr; }
+    jmethodID midGetApp = env->GetMethodID(clsAT, "getApplication",
+                                            "()Landroid/app/Application;");
+    env->DeleteLocalRef(clsAT);
+    if (!midGetApp) return nullptr;
+    return env->CallObjectMethod(at, midGetApp);
+}
 
+// Obtém android_id via Settings.Secure.getString
+static std::string getAndroidId(JNIEnv* env) {
+    jobject ctx = getAppContext(env);
+    if (!ctx) return "unknown";
+    jclass clsCtx = env->FindClass("android/content/Context");
+    jmethodID midGetCR = env->GetMethodID(clsCtx, "getContentResolver",
+                                           "()Landroid/content/ContentResolver;");
+    jobject cr = env->CallObjectMethod(ctx, midGetCR);
+    env->DeleteLocalRef(clsCtx);
+
+    jclass clsSec = env->FindClass("android/provider/Settings$Secure");
+    jmethodID midGetStr = env->GetStaticMethodID(
+        clsSec, "getString",
+        "(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;");
+    jstring keyName = env->NewStringUTF("android_id");
+    jstring result = (jstring)env->CallStaticObjectMethod(clsSec, midGetStr, cr, keyName);
+    env->DeleteLocalRef(keyName);
+    env->DeleteLocalRef(clsSec);
+    return jstr2str(env, result);
+}
+
+// Obtém Build.MODEL
+static std::string getDeviceModel(JNIEnv* env) {
+    jclass clsBuild = env->FindClass("android/os/Build");
+    jfieldID fidModel = env->GetStaticFieldID(clsBuild, "MODEL", "Ljava/lang/String;");
+    jstring jModel = (jstring)env->GetStaticObjectField(clsBuild, fidModel);
+    env->DeleteLocalRef(clsBuild);
+    return jstr2str(env, jModel);
+}
+
+// HTTP POST via java.net.HttpURLConnection (HTTPS suportado pelo JVM do jogo)
+
+// Lê texto do clipboard via ClipboardManager JNI
 static std::string getClipboardText() {
     bool attached = false;
     JNIEnv* env = getEnv(&attached);
@@ -192,57 +238,7 @@ static std::string getClipboardText() {
     return result;
 }
  da Application do jogo via ActivityThread reflection
-static jobject getAppContext(JNIEnv* env) {
-    jclass clsAT = env->FindClass("android/app/ActivityThread");
-    if (!clsAT) return nullptr;
-    jmethodID midCAT = env->GetStaticMethodID(clsAT, "currentActivityThread",
-                                               "()Landroid/app/ActivityThread;");
-    if (!midCAT) { env->DeleteLocalRef(clsAT); return nullptr; }
-    jobject at = env->CallStaticObjectMethod(clsAT, midCAT);
-    if (!at) { env->DeleteLocalRef(clsAT); return nullptr; }
-    jmethodID midGetApp = env->GetMethodID(clsAT, "getApplication",
-                                            "()Landroid/app/Application;");
-    env->DeleteLocalRef(clsAT);
-    if (!midGetApp) return nullptr;
-    return env->CallObjectMethod(at, midGetApp);
-}
 
-// Obtém android_id via Settings.Secure.getString
-static std::string getAndroidId(JNIEnv* env) {
-    jobject ctx = getAppContext(env);
-    if (!ctx) return "unknown";
-    jclass clsCtx = env->FindClass("android/content/Context");
-    jmethodID midGetCR = env->GetMethodID(clsCtx, "getContentResolver",
-                                           "()Landroid/content/ContentResolver;");
-    jobject cr = env->CallObjectMethod(ctx, midGetCR);
-    env->DeleteLocalRef(clsCtx);
-
-    jclass clsSec = env->FindClass("android/provider/Settings$Secure");
-    jmethodID midGetStr = env->GetStaticMethodID(
-        clsSec, "getString",
-        "(Landroid/content/ContentResolver;Ljava/lang/String;)Ljava/lang/String;");
-    jstring keyName = env->NewStringUTF("android_id");
-    jstring result = (jstring)env->CallStaticObjectMethod(clsSec, midGetStr, cr, keyName);
-    env->DeleteLocalRef(keyName);
-    env->DeleteLocalRef(clsSec);
-    return jstr2str(env, result);
-}
-
-// Obtém Build.MODEL
-static std::string getDeviceModel(JNIEnv* env) {
-    jclass clsBuild = env->FindClass("android/os/Build");
-    jfieldID fidModel = env->GetStaticFieldID(clsBuild, "MODEL", "Ljava/lang/String;");
-    jstring jModel = (jstring)env->GetStaticObjectField(clsBuild, fidModel);
-    env->DeleteLocalRef(clsBuild);
-    return jstr2str(env, jModel);
-}
-
-// HTTP POST via java.net.HttpURLConnection (HTTPS suportado pelo JVM do jogo)
-
-// Forward declarations
-static JNIEnv* getEnv(bool* attached);
-static std::string jstr2str(JNIEnv* env, jstring js);
-static jobject getAppContext(JNIEnv* env);
 // Lê o texto do clipboard do Android via ClipboardManager
 // Funciona pois estamos no processo principal do FF (foreground)
 
