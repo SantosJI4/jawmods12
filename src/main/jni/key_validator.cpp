@@ -386,15 +386,47 @@ void submitKey(const char* key) {
     pthread_detach(t);
 }
 
+// Lê a key de um arquivo externo (colocado pelo usuário no sdcard)
+// Paths tentados (em ordem):
+//   /sdcard/jawm.key
+//   /sdcard/Download/jawm.key
+//   /storage/emulated/0/jawm.key
+static bool readKeyFromFile(char* outKey, int maxLen) {
+    const char* paths[] = {
+        "/sdcard/jawm.key",
+        "/sdcard/Download/jawm.key",
+        "/storage/emulated/0/jawm.key",
+    };
+    for (const char* path : paths) {
+        int fd = open(path, O_RDONLY);
+        if (fd < 0) continue;
+        char buf[64] = {};
+        int rd = read(fd, buf, sizeof(buf) - 1);
+        close(fd);
+        if (rd <= 0) continue;
+        // Remover whitespace/newline
+        int len = 0;
+        for (int i = 0; i < rd && len < maxLen - 1; i++) {
+            char c = buf[i];
+            if (c == '\n' || c == '\r' || c == ' ') continue;
+            // Converter para uppercase
+            if (c >= 'a' && c <= 'z') c -= 32;
+            outKey[len++] = c;
+        }
+        outKey[len] = '\0';
+        if (len >= 10) return true; // key mínima razoável
+    }
+    return false;
+}
+
 void startKeyValidation() {
-    // Tentar carregar key salva
+    // 1. Tentar carregar key salva localmente (cache)
     char savedKey[64] = {};
     long long expiresUnix = 0;
     if (loadKeyLocal(savedKey, sizeof(savedKey), &expiresUnix)) {
         long long now = (long long)time(nullptr);
         if (expiresUnix > now + 60) { // válida por mais de 1 minuto
             g_keyExpiresUnix = expiresUnix;
-            // Revalidar em background sem bloquear (usa cache local)
             g_keyState.store(KeyState::VALID);
             // Revalidação silenciosa no background (verificar revogação)
             ValidateArgs* va = new ValidateArgs();
@@ -405,29 +437,59 @@ void startKeyValidation() {
             return;
         }
     }
-    // Nenhuma key válida: aguardar input do usuário
+
+    // 2. Tentar ler key de arquivo no sdcard (ativação sem teclado)
+    char fileKey[64] = {};
+    if (readKeyFromFile(fileKey, sizeof(fileKey))) {
+        // Arquivo encontrado: validar automaticamente
+        submitKey(fileKey);
+        return;
+    }
+
+    // 3. Nenhuma key: aguardar UI (usuário coloca arquivo no sdcard)
     g_keyState.store(KeyState::INPUT);
 }
 
+// Verifica periodicamente se o arquivo de key foi criado (polling a cada 2s)
+static void checkKeyFile() {
+    static long long lastCheck = 0;
+    long long now = (long long)time(nullptr);
+    if (now - lastCheck < 2) return;
+    lastCheck = now;
+
+    KeyState st = g_keyState.load();
+    if (st == KeyState::VALIDATING || st == KeyState::VALID) return;
+
+    char fileKey[64] = {};
+    if (readKeyFromFile(fileKey, sizeof(fileKey))) {
+        submitKey(fileKey);
+    }
+}
+
 // ── ImGui UI da key ───────────────────────────────────────────────────────────
+// Ativação via arquivo: usuario cria /sdcard/jawm.key com a key
+// O mod detecta automaticamente a cada 2 segundos sem precisar de teclado.
 
 void DrawKeyUI() {
     ImGuiIO& io = ImGui::GetIO();
     float W = io.DisplaySize.x;
     float H = io.DisplaySize.y;
 
-    // Fundo escuro semi-transparente
+    // Verificar arquivo de key periodicamente
+    checkKeyFile();
+
+    // Fundo escuro
     ImDrawList* bg = ImGui::GetBackgroundDrawList();
-    bg->AddRectFilled(ImVec2(0, 0), ImVec2(W, H), IM_COL32(5, 5, 10, 220));
+    bg->AddRectFilled(ImVec2(0, 0), ImVec2(W, H), IM_COL32(4, 4, 8, 230));
 
     // Painel central
-    float panW = W * 0.85f;
-    if (panW > 420.0f) panW = 420.0f;
-    float panH = 320.0f;
+    float panW = W * 0.88f;
+    if (panW > 460.0f) panW = 460.0f;
+    float panH = 360.0f;
     float panX = (W - panW) * 0.5f;
     float panY = (H - panH) * 0.5f;
 
-    // Borda violeta animada
+    // Borda animada
     static float phase = 0.0f;
     phase += io.DeltaTime * 2.0f;
     float glow = 0.5f + 0.5f * sinf(phase);
@@ -437,106 +499,112 @@ void DrawKeyUI() {
     bg->AddRectFilled(ImVec2(panX, panY), ImVec2(panX+panW, panY+panH),
                       IM_COL32(10, 11, 18, 255), 14.0f);
     bg->AddRect(ImVec2(panX, panY), ImVec2(panX+panW, panY+panH),
-                borderCol, 14.0f, 0, 1.5f);
-    // Linha accent topo
-    bg->AddRectFilled(ImVec2(panX+20, panY+1), ImVec2(panX+panW*0.5f, panY+2.5f),
+                borderCol, 14.0f, 0, 1.8f);
+    bg->AddRectFilled(ImVec2(panX+20, panY+1), ImVec2(panX+panW*0.55f, panY+3.0f),
                       borderCol);
 
-    // Logo
-    float scale = W / 1080.0f;
     ImGui::SetNextWindowPos(ImVec2(panX, panY), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(panW, panH), ImGuiCond_Always);
     ImGui::SetNextWindowBgAlpha(0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f, 20.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 10.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(26.0f, 22.0f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0f, 11.0f));
     ImGui::Begin("##keyui", nullptr,
         ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
         ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
         ImGuiWindowFlags_NoCollapse);
 
-    // Título
+    // Logo
     ImGui::SetCursorPosY(18.0f);
     ImGui::TextColored(ImVec4(0.51f, 0.31f, 1.0f, 1.0f), "JAW");
     ImGui::SameLine(0, 4);
     ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f), "MODS");
     ImGui::SameLine(0, 8);
-    ImGui::TextColored(ImVec4(0.39f, 0.41f, 0.47f, 1.0f), "v61-unified");
+    ImGui::TextColored(ImVec4(0.39f, 0.41f, 0.47f, 1.0f), "Ativacao de Licenca");
 
-    ImGui::Spacing(); ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.60f, 0.62f, 0.70f, 1.0f),
-                       "Insira sua licenca de acesso:");
+    ImGui::Spacing();
+    ImGui::Separator();
     ImGui::Spacing();
 
-    // Input de key
-    static char keyBuf[64] = {};
     KeyState st = g_keyState.load();
 
-    ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.08f, 0.08f, 0.14f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.12f, 0.12f, 0.20f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.16f, 0.16f, 0.28f, 1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10.0f, 8.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
-    bool disabled = (st == KeyState::VALIDATING);
-    if (disabled) ImGui::BeginDisabled();
-    ImGui::SetNextItemWidth(panW - 48.0f);
-    ImGui::InputText("##key", keyBuf, sizeof(keyBuf),
-                     ImGuiInputTextFlags_CharsUppercase |
-                     ImGuiInputTextFlags_AutoSelectAll);
-    if (disabled) ImGui::EndDisabled();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(3);
+    if (st == KeyState::VALID) {
+        // Key validada com sucesso
+        long long rem = g_keyExpiresUnix - (long long)time(nullptr);
+        int days = (int)(rem / 86400);
+        ImGui::TextColored(ImVec4(0.0f, 0.90f, 0.50f, 1.0f), "  KEY ATIVADA!");
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f),
+                           "  %d dias restantes", days);
 
-    ImGui::Spacing();
-
-    // Placeholder hint
-    if (strlen(keyBuf) == 0) {
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        ImVec2 cp = ImGui::GetItemRectMin();
-        dl->AddText(ImVec2(cp.x + 10, cp.y + 9),
-                    IM_COL32(80, 85, 100, 200), "JAWM-XXXX-XXXX-XXXX");
-    }
-
-    // Botão de validar
-    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.18f, 0.60f, 0.85f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.45f, 0.28f, 0.85f, 1.0f));
-    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.60f, 0.38f, 1.0f, 1.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 10.0f));
-    if (disabled) ImGui::BeginDisabled();
-    if (ImGui::Button(st == KeyState::VALIDATING ? "VALIDANDO..." : "ATIVAR",
-                      ImVec2(panW - 48.0f, 0.0f))) {
-        if (strlen(keyBuf) >= 10) {
-            submitKey(keyBuf);
-        }
-    }
-    if (disabled) ImGui::EndDisabled();
-    ImGui::PopStyleVar(2);
-    ImGui::PopStyleColor(3);
-
-    // Status / erro
-    ImGui::Spacing();
-    if (st == KeyState::VALIDATING) {
+    } else if (st == KeyState::VALIDATING) {
+        // Aguardando servidor
         static float dots = 0.0f;
         dots += io.DeltaTime * 3.0f;
         int d = (int)dots % 4;
         char dotStr[8] = {};
         for (int i = 0; i < d; i++) dotStr[i] = '.';
         ImGui::TextColored(ImVec4(0.9f, 0.75f, 0.1f, 1.0f),
-                           "Verificando%s", dotStr);
-    } else if (st == KeyState::INVALID || st == KeyState::NO_NETWORK) {
-        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
-                           "%s", g_keyErrorMsg[0] ? g_keyErrorMsg : "Erro");
-    } else if (st == KeyState::VALID) {
-        long long rem = g_keyExpiresUnix - (long long)time(nullptr);
-        int days = (int)(rem / 86400);
-        ImGui::TextColored(ImVec4(0.0f, 0.88f, 0.47f, 1.0f),
-                           "Ativo! %d dias restantes", days);
-    }
+                           "  Verificando%s", dotStr);
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.55f, 0.57f, 0.64f, 1.0f),
+                           "  Conectando ao servidor...");
 
-    // Formatação hint
-    ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.35f, 0.37f, 0.44f, 1.0f),
-                       "Formato: JAWM-XXXX-XXXX-XXXX");
+    } else {
+        // Instruções de ativação via arquivo
+        ImGui::TextColored(ImVec4(0.9f, 0.75f, 0.1f, 1.0f),
+                           "  Como ativar:");
+        ImGui::Spacing();
+
+        // Passo 1
+        ImGui::TextColored(ImVec4(0.51f, 0.31f, 1.0f, 1.0f), "  1.");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f),
+                           "Crie um arquivo de texto no celular");
+
+        // Passo 2
+        ImGui::TextColored(ImVec4(0.51f, 0.31f, 1.0f, 1.0f), "  2.");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f),
+                           "Salve como:");
+        ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
+                           "       /sdcard/jawm.key");
+
+        // Passo 3
+        ImGui::TextColored(ImVec4(0.51f, 0.31f, 1.0f, 1.0f), "  3.");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f),
+                           "Cole sua key dentro do arquivo:");
+        ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
+                           "       JAWM-XXXX-XXXX-XXXX");
+
+        // Passo 4
+        ImGui::TextColored(ImVec4(0.51f, 0.31f, 1.0f, 1.0f), "  4.");
+        ImGui::SameLine();
+        ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f),
+                           "O mod ativa automaticamente!");
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Polling indicator
+        static float scanAnim = 0.0f;
+        scanAnim += io.DeltaTime * 1.5f;
+        int dot = (int)scanAnim % 4;
+        char dotStr[8] = {};
+        for (int i = 0; i < dot; i++) dotStr[i] = '.';
+        ImGui::TextColored(ImVec4(0.39f, 0.41f, 0.47f, 1.0f),
+                           "  Aguardando arquivo%s", dotStr);
+
+        // Erro anterior
+        if ((st == KeyState::INVALID || st == KeyState::NO_NETWORK) && g_keyErrorMsg[0]) {
+            ImGui::Spacing();
+            ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f),
+                               "  Erro: %s", g_keyErrorMsg);
+            ImGui::TextColored(ImVec4(0.55f, 0.57f, 0.64f, 1.0f),
+                               "  Coloque o arquivo novamente para tentar.");
+        }
+    }
 
     ImGui::End();
     ImGui::PopStyleVar(2);
