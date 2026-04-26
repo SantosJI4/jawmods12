@@ -673,6 +673,7 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
         // Magic Bullet: snap para cabeca no frame exato do inicio do disparo
         // Independe do smooth/alwaysTrack -- garante hit na cabeca ao atirar
         // Ativa somente se: aimbot ligado + tem lock + nao busy + firingEdge
+        bool magicBulletFired = false;
         if (firingEdge && sharedData->magicBulletEnabled && sharedData->aimbotEnabled &&
             g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position && !isBusy) {
             Vector3 mbCamPos = fn_get_position(g_camTransform, nullptr);
@@ -684,11 +685,13 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
                 if (mbLen >= 0.1f) {
                     Quaternion mbQ = LookQuatFromDir(mbDx, mbDy, mbDz);
                     fn_SetAimRotation(self, mbQ, true, nullptr);
+                    magicBulletFired = true; // snap aplicado, pular aimbot suave neste frame
                 }
             }
         }
 
-        if (g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position &&
+        // Aimbot suave: nao rodar se Magic Bullet ja aplicou rotacao neste frame
+        if (!magicBulletFired && g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position &&
             sharedData->aimbotEnabled && shouldAim && !isBusy) {
             Vector3 camPos = fn_get_position(g_camTransform, nullptr);
             if (!std::isnan(camPos.x) && !std::isnan(camPos.y) && !std::isnan(camPos.z)) {
