@@ -656,7 +656,10 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
                 if (len >= 0.1f) {
                     Quaternion targetQ = LookQuatFromDir(dx, dy, dz);
                     float smooth = sharedData->aimbotSmooth;
-                    if (smooth > 0.0f && smooth < 1.0f) {
+                    // Snap instantaneo na primeira frame de novo lock (AWM/12-gauge)
+                    bool doSnap = g_aimbotJustLocked;
+                    g_aimbotJustLocked = false;
+                    if (!doSnap && smooth > 0.0f && smooth < 1.0f) {
                         Quaternion curQ = *(Quaternion*)((uint8_t*)self + OFF_m_CurrentAimRotation);
                         float dot = curQ.x*targetQ.x + curQ.y*targetQ.y
                                   + curQ.z*targetQ.z + curQ.w*targetQ.w;
@@ -664,7 +667,12 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
                             targetQ.x=-targetQ.x; targetQ.y=-targetQ.y;
                             targetQ.z=-targetQ.z; targetQ.w=-targetQ.w;
                         }
-                        float t = 1.0f - smooth;
+                        // Smooth adaptativo: rapido quando longe, preciso perto do alvo
+                        float absDot = (dot < 0.0f ? -dot : dot);
+                        float angleErr = 1.0f - absDot;  // 0=no alvo, 1=longe
+                        float baseT = 1.0f - smooth;     // velocidade base
+                        float t = baseT + angleErr * baseT * 2.5f; // ate 3.5x mais rapido ao longe
+                        if (t > 1.0f) t = 1.0f;
                         targetQ.x = curQ.x + (targetQ.x - curQ.x) * t;
                         targetQ.y = curQ.y + (targetQ.y - curQ.y) * t;
                         targetQ.z = curQ.z + (targetQ.z - curQ.z) * t;
@@ -962,11 +970,17 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
             }
 
             if (screenDist < effectiveRadius) {
-                if (screenDist < g_aimbotBestDist) {
-                    g_aimbotBestDist      = screenDist;
+                // Bonus sticky: alvo ja travado tem 55% de desconto na comparacao
+                // Evita troca rapida entre inimigos proximos (causa do tremido)
+                bool isCurrent = (self == g_aimbotLockedTarget && g_aimbotHasLock);
+                float compareDist = isCurrent ? screenDist * 0.45f : screenDist;
+                if (compareDist < g_aimbotBestDist) {
+                    bool isNew = (self != g_aimbotLockedTarget || !g_aimbotHasLock);
+                    g_aimbotBestDist      = compareDist;
                     g_aimbotLockedTarget  = self;
                     g_aimbotLockedHeadPos = aimbotHeadPos;
                     g_aimbotHasLock       = true;
+                    if (isNew) g_aimbotJustLocked = true; // snap no novo alvo
                 }
             }
         }
