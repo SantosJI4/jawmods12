@@ -1,4 +1,4 @@
-LOCAL_PATH := $(call my-dir)
+﻿LOCAL_PATH := $(call my-dir)
 
 # ============================================================
 # PREBUILT: libdobby.a — Inline hook library
@@ -143,7 +143,7 @@ include $(BUILD_SHARED_LIBRARY)
 # ============================================================
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := opus
+LOCAL_MODULE := soundtouch
 
 UNIFIED_CFLAGS := -w -Wno-error=format-security -fvisibility=hidden -fpermissive -fexceptions
 UNIFIED_CFLAGS += -DNOROOT_BUILD -DUNIFIED_BUILD
