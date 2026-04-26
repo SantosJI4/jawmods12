@@ -1,4 +1,4 @@
-/*
+﻿/*
  * key_validator.cpp — Validação de licença JAWMODS (modo unificado)
  * ============================================================
  *
@@ -85,8 +85,34 @@ static bool loadKeyLocal(char* outKey, int keyMaxLen, long long* outExpires) {
 
 // ── JNI helpers ───────────────────────────────────────────────────────────────
 
-// Lê o texto do clipboard do Android via ClipboardManager
-// Funciona pois estamos no processo principal do FF (foreground)
+// Obtém JNIEnv para o thread atual (attach se necessário)
+static JNIEnv* getEnv(bool* attached) {
+    *attached = false;
+    if (!g_jvm) return nullptr;
+    JNIEnv* env = nullptr;
+    int res = g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6);
+    if (res == JNI_EDETACHED) {
+        if (g_jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+            *attached = true;
+        } else {
+            return nullptr;
+        }
+    }
+    return env;
+}
+
+// Converte jstring → std::string
+static std::string jstr2str(JNIEnv* env, jstring js) {
+    if (!js) return "";
+    const char* cstr = env->GetStringUTFChars(js, nullptr);
+    std::string s = cstr ? cstr : "";
+    if (cstr) env->ReleaseStringUTFChars(js, cstr);
+    return s;
+}
+
+// Obtém o contexto
+
+
 static std::string getClipboardText() {
     bool attached = false;
     JNIEnv* env = getEnv(&attached);
@@ -165,33 +191,7 @@ static std::string getClipboardText() {
     if (attached) g_jvm->DetachCurrentThread();
     return result;
 }
-
-// Obtém JNIEnv para o thread atual (attach se necessário)
-static JNIEnv* getEnv(bool* attached) {
-    *attached = false;
-    if (!g_jvm) return nullptr;
-    JNIEnv* env = nullptr;
-    int res = g_jvm->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (res == JNI_EDETACHED) {
-        if (g_jvm->AttachCurrentThread(&env, nullptr) == JNI_OK) {
-            *attached = true;
-        } else {
-            return nullptr;
-        }
-    }
-    return env;
-}
-
-// Converte jstring → std::string
-static std::string jstr2str(JNIEnv* env, jstring js) {
-    if (!js) return "";
-    const char* cstr = env->GetStringUTFChars(js, nullptr);
-    std::string s = cstr ? cstr : "";
-    if (cstr) env->ReleaseStringUTFChars(js, cstr);
-    return s;
-}
-
-// Obtém o contexto da Application do jogo via ActivityThread reflection
+ da Application do jogo via ActivityThread reflection
 static jobject getAppContext(JNIEnv* env) {
     jclass clsAT = env->FindClass("android/app/ActivityThread");
     if (!clsAT) return nullptr;
@@ -238,6 +238,14 @@ static std::string getDeviceModel(JNIEnv* env) {
 }
 
 // HTTP POST via java.net.HttpURLConnection (HTTPS suportado pelo JVM do jogo)
+
+// Forward declarations
+static JNIEnv* getEnv(bool* attached);
+static std::string jstr2str(JNIEnv* env, jstring js);
+static jobject getAppContext(JNIEnv* env);
+// Lê o texto do clipboard do Android via ClipboardManager
+// Funciona pois estamos no processo principal do FF (foreground)
+
 static std::string httpPost(JNIEnv* env, const char* url, const char* jsonBody) {
     std::string result;
 
@@ -730,14 +738,16 @@ void DrawKeyUI() {
         // ── Alternativa: arquivo no sdcard ──
         ImGui::TextColored(ImVec4(0.55f, 0.57f, 0.64f, 1.0f),
                            "  Ou coloque o arquivo jawm.key em:");
-        const std::string& extDir = cachedExternalFilesDir();
-        if (!extDir.empty()) {
-            char keyPath[512];
-            snprintf(keyPath, sizeof(keyPath), "%s/jawm.key", extDir.c_str());
-            ImGui::TextColored(ImVec4(0.0f, 0.65f, 0.85f, 1.0f), "  %s", keyPath);
-        } else {
-            ImGui::TextColored(ImVec4(0.0f, 0.65f, 0.85f, 1.0f),
-                               "  /sdcard/Download/jawm.key");
+        {
+            const std::string& extDir2 = cachedExternalFilesDir();
+            if (!extDir2.empty()) {
+                char keyPath[512];
+                snprintf(keyPath, sizeof(keyPath), "%s/jawm.key", extDir2.c_str());
+                ImGui::TextColored(ImVec4(0.0f, 0.65f, 0.85f, 1.0f), "  %s", keyPath);
+            } else {
+                ImGui::TextColored(ImVec4(0.0f, 0.65f, 0.85f, 1.0f),
+                                   "  /sdcard/Download/jawm.key");
+            }
         }
         ImGui::Spacing();
         ImGui::Separator();
@@ -755,15 +765,17 @@ void DrawKeyUI() {
         ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f),
                            "Salve como:");
         // Mostrar o caminho real obtido via JNI (mais confiável)
-        const std::string& extDir = cachedExternalFilesDir();
-        if (!extDir.empty()) {
-            char keyPath[512];
-            snprintf(keyPath, sizeof(keyPath), "%s/jawm.key", extDir.c_str());
-            ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
-                               "  %s", keyPath);
-        } else {
-            ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
-                               "  /sdcard/Download/jawm.key");
+        {
+            const std::string& extDir3 = cachedExternalFilesDir();
+            if (!extDir3.empty()) {
+                char keyPath[512];
+                snprintf(keyPath, sizeof(keyPath), "%s/jawm.key", extDir3.c_str());
+                ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
+                                   "  %s", keyPath);
+            } else {
+                ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
+                                   "  /sdcard/Download/jawm.key");
+            }
         }
 
         // Passo 3
