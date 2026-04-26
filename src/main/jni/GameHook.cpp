@@ -386,6 +386,11 @@ static uintptr_t resolveElfSymbol(uintptr_t loadBase, const char *symName) {
 // NickName â€” Player::get_NickName() â€” string IL2CPP do nome do player
 // Dump L651414: public System.String get_NickName() // 0x676CDF0
 #define OFF_get_NickName              0x676CDF0
+// Aimbot busy-guard: bloquear aimbot durante granada e skill ativa (parede de gelo)
+// get_IsGrenadeStart() - true quando player esta armando/jogando granada (Dump L651458)
+#define OFF_get_IsGrenadeStart    0x676DDE4
+// get_IsRunningActSkill() - true quando skill ativa em uso (gelo, etc.) (Dump L652819)
+#define OFF_get_IsRunningActSkill 0x68242E8
 
 // ============================================================
 // Function Pointers â€” resolvidos via base + offset direto
@@ -439,6 +444,9 @@ static bool  (*fn_IsCrouching)(void* player, void* method) = nullptr;  // agacha
 static bool  (*fn_get_IsDieing)(void* player, void* method)= nullptr;  // derrubado/sangrando
 // IsFiring â€” Player::IsFiring() (v44)
 static bool (*fn_IsFiring)(void* self, void* method) = nullptr;
+// Busy-guard: granada e skill ativa (v61)
+static bool (*fn_get_IsGrenadeStart)(void* self, void* method)    = nullptr;
+static bool (*fn_get_IsRunningActSkill)(void* self, void* method)  = nullptr;
 // â”€â”€ Player Hacks (v49) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // NickName â€” Player::get_NickName() â€” sÃ³ chamado, nÃ£o hookeado
 static void* (*fn_get_NickName)(void* self, void* method) = nullptr;
@@ -645,8 +653,13 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
         }
         bool shouldAim = sharedData->aimbotAlwaysTrack || triggerActive;
 
+        // Busy-guard: nao mover mira durante granada ou skill ativa (gelo, etc.)
+        bool isBusy = false;
+        if (fn_get_IsGrenadeStart    && fn_get_IsGrenadeStart(self, nullptr))    isBusy = true;
+        if (fn_get_IsRunningActSkill && fn_get_IsRunningActSkill(self, nullptr)) isBusy = true;
+
         if (g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position &&
-            sharedData->aimbotEnabled && shouldAim) {
+            sharedData->aimbotEnabled && shouldAim && !isBusy) {
             Vector3 camPos = fn_get_position(g_camTransform, nullptr);
             if (!std::isnan(camPos.x) && !std::isnan(camPos.y) && !std::isnan(camPos.z)) {
                 float dx = g_aimbotLockedHeadPos.x - camPos.x;
@@ -1124,7 +1137,10 @@ void* hack_thread(void*) {
     fn_IsCrouching    = RESOLVE_OFFSET(bool(*)(void*, void*),              OFF_IsCrouching);
     fn_get_IsDieing   = RESOLVE_OFFSET(bool(*)(void*, void*),              OFF_get_IsDieing);
     // Player Hacks (v49) â€” get_NickName sÃ³ chamado (nÃ£o hookeado)
-    fn_get_NickName   = RESOLVE_OFFSET(void*(*)(void*, void*),             OFF_get_NickName);
+    fn_get_NickName        = RESOLVE_OFFSET(void*(*)(void*, void*), OFF_get_NickName);
+    // Busy-guard: desativa aimbot durante granada/skill ativa
+    fn_get_IsGrenadeStart    = OFF_get_IsGrenadeStart    ? RESOLVE_OFFSET(bool(*)(void*, void*), OFF_get_IsGrenadeStart)    : nullptr;
+    fn_get_IsRunningActSkill = OFF_get_IsRunningActSkill ? RESOLVE_OFFSET(bool(*)(void*, void*), OFF_get_IsRunningActSkill) : nullptr;
     // Speed Hack â€” resolvido via VmtHook em UpdateVelocity (ver adiante)
 
     LOGI("Offsets resolvidos:");
