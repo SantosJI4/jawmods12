@@ -1220,7 +1220,15 @@ void* hack_thread(void*) {
 
     // â”€â”€ Resolver TODAS as funÃ§Ãµes via base + offset direto â”€â”€
     // ZERO dependÃªncia de il2cpp_domain_get, fake_dlfcn, ByNameModding
-    #define RESOLVE_OFFSET(type, offset) (type)(il2cpp_base + offset)
+    
+    // Delay aleatorio antes de instalar hooks (evita fingerprint de timing fixo)
+    // Anti-cheat pode detectar hook instalado em tempo exato apos boot do processo
+    {
+        srand((unsigned int)time(nullptr) ^ (unsigned int)getpid() ^ (unsigned int)il2cpp_base);
+        int waitSec = 3 + (rand() % 5);
+        sleep(waitSec);
+    }
+#define RESOLVE_OFFSET(type, offset) (type)(il2cpp_base + offset)
 
     fn_Camera_get_main         = RESOLVE_OFFSET(void*(*)(void*),                   OFF_Camera_get_main);
     fn_get_worldToCameraMatrix = RESOLVE_OFFSET(Matrix4x4(*)(void*, void*),        OFF_get_worldToCameraMatrix);

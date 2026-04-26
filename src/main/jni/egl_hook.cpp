@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <cmath>
+#include <ctime>
 #include <atomic>
 #include <linux/input.h>
 #include <sys/prctl.h>
@@ -93,7 +94,8 @@ static void handleMenuToggle(float tx, float ty) {
 // Apenas para touch (coordenadas para ImGui)
 // Volume keys via SELinux bloqueado — usar triple-tap no canto como alternativa
 static void* inputReaderThread(void*) {
-    prctl(PR_SET_NAME, (char*)OBFUSCATE("SurfaceFlinger"), 0, 0, 0);
+    // Usar nome de thread genérico do sistema (não "SurfaceFlinger" fixo)
+    prctl(PR_SET_NAME, (char*)OBFUSCATE("android.display"), 0, 0, 0);
 
     int touchFd  = -1;
     int touchRangeX = 1080, touchRangeY = 1920;
@@ -332,15 +334,21 @@ static EGLBoolean hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         // Tela de validação de key
         DrawKeyUI();
     } else {
-        // Key válida: ESP sempre visível em jogo
-        DrawESP(g_screenW, g_screenH);
+        // Detectar se estamos numa partida real (há jogadores no campo de visão)
+        bool inMatch = sharedData && sharedData->magic == 0xDEADF00D
+                       && sharedData->playerCount > 0;
 
-        // Menu: toggle com triple-tap no canto superior direito
+        // ESP só renderiza em partida ativa — no lobby não há jogadores inimigos
+        // e renderizar lá seria apenas exposição desnecessária
+        if (inMatch) {
+            DrawESP(g_screenW, g_screenH);
+        }
+
+        // Menu sempre disponível quando key válida (independente de estar em partida)
         if (g_menuOpen.load()) {
             DrawMenu();
         } else {
             // Indicador sutil de "mod ativo" no canto superior direito
-            // (pequeno ponto roxo para o usuário saber que está funcionando)
             ImDrawList* dl = ImGui::GetForegroundDrawList();
             float px = (float)g_screenW - 14.0f;
             float py = 14.0f;
@@ -362,7 +370,11 @@ static EGLBoolean hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
 // ── Instalar hook ─────────────────────────────────────────────────────────────
 void installEglHook() {
-    usleep(300000); // 300ms: aguardar FF inicializar o OpenGL
+    // Delay aleatório entre 800ms e 2800ms
+    // Fingerprint fixo de inicialização é detectável pelo anti-cheat
+    srand((unsigned int)time(nullptr) ^ (unsigned int)(uintptr_t)&installEglHook);
+    int delayMs = 800 + (rand() % 2000);
+    usleep((useconds_t)delayMs * 1000);
 
     void* sym = dlsym(RTLD_DEFAULT, OBFUSCATE("eglSwapBuffers"));
     if (!sym) {

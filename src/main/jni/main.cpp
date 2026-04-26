@@ -65,9 +65,10 @@
 // ============================================================
 // ESP State
 // ============================================================
-static bool esp = true;   // ligado por padrao
-static bool drawEnemyBox = true;
-static bool drawSnapLine = true;
+// Por padrão DESLIGADO: reduz detecção server-side enquanto o usuário decide usar
+static bool esp = false;
+static bool drawEnemyBox = false;
+static bool drawSnapLine = false;
 static bool drawDistance = false;
 static ImVec4 espLineColor = ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
 static float espMaxDistance = 999.0f;
@@ -304,7 +305,7 @@ void DrawESP(int screenW, int screenH) {
     if (!isShmReady()) return;
 
     // Sincronizar configuraÃ§Ãµes de aimbot com shared memory
-    sharedData->espEnabled            = 1;
+    sharedData->espEnabled            = esp ? 1 : 0; // respeitar toggle
     sharedData->aimbotEnabled         = aimbotEnabled ? 1 : 0;
     sharedData->aimbotFovDeg          = aimbotFovDeg;
     sharedData->aimbotSmooth          = aimbotSmooth;
@@ -317,6 +318,10 @@ void DrawESP(int screenW, int screenH) {
 
     if (!esp) return;
     if (sharedData->magic != 0xDEADF00D) return;
+
+    // Rate limit: renderizar ESP a cada 2 frames (~30fps) para parecer menos agressivo
+    static int s_espFrameSkip = 0;
+    if ((++s_espFrameSkip & 1) != 0) return;
 
     uint32_t seq = sharedData->writeSeq.load(std::memory_order_acquire);
     int count = sharedData->playerCount;
@@ -1198,7 +1203,7 @@ void DrawMenu() {
         ImVec2(wpos.x+W-1, wpos.y+winH-FOOTER_H), cBorder);
 
     ImGui::SetCursorPos(ImVec2(14.0f, winH - FOOTER_H + 7.0f));
-    ImGui::TextColored(cv4Dim, "jawmods.app");
+    ImGui::TextColored(cv4Dim, "v1.0");
     ImGui::SameLine();
     // ESP status pill no footer
     if (esp) {
