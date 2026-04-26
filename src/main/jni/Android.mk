@@ -132,15 +132,18 @@ LOCAL_STATIC_LIBRARIES := dobby
 include $(BUILD_SHARED_LIBRARY)
 
 # ============================================================
-# MODULE 3b: libgl2_unified.so — SISTEMA UNIFICADO (no-root)
+# MODULE 3b: libopus.so — SISTEMA UNIFICADO (no-root)
 # ============================================================
+# Nome "opus" = codec de áudio legítimo, passa despercebido.
 # Contém TUDO: GameHook (VMT) + EGL hook + ImGui + Key Validator
-# Injetar no APK do Free Fire via patch smali (System.loadLibrary)
+# Injetar no APK do Free Fire via patch smali:
+#   const-string v0, "opus"
+#   invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
 # Sem APK de overlay separado. Menu abre com Volume DOWN.
 # ============================================================
 
 include $(CLEAR_VARS)
-LOCAL_MODULE := gl2_unified
+LOCAL_MODULE := opus
 
 UNIFIED_CFLAGS := -w -Wno-error=format-security -fvisibility=hidden -fpermissive -fexceptions
 UNIFIED_CFLAGS += -DNOROOT_BUILD -DUNIFIED_BUILD

@@ -1,9 +1,9 @@
-# JAWMODS — Guia de Instalação No-Root (Sistema Unificado)
+﻿# JAWMODS — Guia de Instalação No-Root (Sistema Unificado)
 
 ## Visão Geral
 
 O sistema unificado embutе **tudo** (hook, ESP, Aimbot, validação de key e menu)
-dentro de uma única `libgl2_unified.so` injetada no APK do Free Fire.
+dentro de uma única `libopus.so` injetada no APK do Free Fire.
 **Nenhum APK extra é necessário.** O menu aparece dentro do próprio jogo.
 
 ```
@@ -11,8 +11,8 @@ APK do FF (modificado)
   └── lib/arm64-v8a/
         ├── libil2cpp.so     ← original (não modificado)
         ├── libmain.so       ← original (não modificado)
-        └── libgl2_unified.so ← nosso mod (NOVO)
-  └── smali/               ← bytecode patcheado para chamar loadLibrary("gl2_unified")
+        └── libopus.so ← nosso mod (NOVO)
+  └── smali/               ← bytecode patcheado para chamar loadLibrary("opus")
 ```
 
 ---
@@ -28,7 +28,7 @@ APK do FF (modificado)
 
 ---
 
-## Passo 1 — Compilar libgl2_unified.so
+## Passo 1 — Compilar libopus.so
 
 No Android Studio ou linha de comando:
 
@@ -43,7 +43,7 @@ ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=src/main/jni/Android.mk \
 
 A lib compilada estará em:
 ```
-build/intermediates/cxx/.../arm64-v8a/libgl2_unified.so
+build/intermediates/cxx/.../arm64-v8a/libopus.so
 ```
 
 ---
@@ -61,7 +61,7 @@ apktool d freefireth.apk -o ff_out/ --no-res
 ## Passo 3 — Copiar a Lib
 
 ```bash
-cp libgl2_unified.so ff_out/lib/arm64-v8a/libgl2_unified.so
+cp libopus.so ff_out/lib/arm64-v8a/libopus.so
 ```
 
 ---
@@ -88,7 +88,7 @@ Encontre o método `onCreate(Landroid/os/Bundle;)V` e adicione
 
 ```smali
 # Adicionar estas 2 linhas:
-const-string v0, "gl2_unified"
+const-string v0, "opus"
 invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
 ```
 
@@ -101,7 +101,7 @@ invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
     invoke-super {p0, p1}, Lcom/unity3d/player/UnityPlayerActivity;->onCreate(Landroid/os/Bundle;)V
 
     # ↓ ADICIONAR AQUI
-    const-string v0, "gl2_unified"
+    const-string v0, "opus"
     invoke-static {v0}, Ljava/lang/System;->loadLibrary(Ljava/lang/String;)V
     # ↑ FIM DO PATCH
 
@@ -189,14 +189,14 @@ Você entrega apenas **`ff_final.apk`**. O cliente:
 | Frida | Scan de /proc/self/maps |
 | Redistribuição sem controle | Sistema de key com HWID binding (SHA256 android_id:model) |
 | Logs no logcat | Zero logs em produção (STEALTH_DEBUG desabilitado) |
-| Detecção por nome de lib | libgl2_unified.so parece lib OpenGL legítima |
+| Detecção por nome de lib | libopus.so parece lib OpenGL legítima |
 
 ---
 
 ## Troubleshooting
 
 **Menu não aparece:**
-- Verifique se `libgl2_unified.so` está em `lib/arm64-v8a/` (não `armeabi-v7a`)
+- Verifique se `libopus.so` está em `lib/arm64-v8a/` (não `armeabi-v7a`)
 - Confirme que o patch smali foi aplicado corretamente (olhar logcat: `adb logcat | grep -E "gl2|INJ"`)
 
 **Jogo crasha ao abrir:**
@@ -217,7 +217,7 @@ Você entrega apenas **`ff_final.apk`**. O cliente:
 ## Arquitetura Técnica
 
 ```
-Sistema Unificado libgl2_unified.so
+Sistema Unificado libopus.so
 ├── inject.cpp          → JNI_OnLoad + anti-debug + startup
 │   ├── Salva JavaVM* (para HTTP key validation)
 │   ├── Inicia hack_thread (GameHook)
