@@ -85,6 +85,87 @@ static bool loadKeyLocal(char* outKey, int keyMaxLen, long long* outExpires) {
 
 // ── JNI helpers ───────────────────────────────────────────────────────────────
 
+// Lê o texto do clipboard do Android via ClipboardManager
+// Funciona pois estamos no processo principal do FF (foreground)
+static std::string getClipboardText() {
+    bool attached = false;
+    JNIEnv* env = getEnv(&attached);
+    if (!env) return "";
+
+    std::string result;
+    jobject ctx = getAppContext(env);
+    if (!ctx) { if (attached) g_jvm->DetachCurrentThread(); return ""; }
+
+    // ctx.getSystemService("clipboard")
+    jclass clsCtx = env->FindClass("android/content/Context");
+    jmethodID midGetSys = env->GetMethodID(clsCtx, "getSystemService",
+                                            "(Ljava/lang/String;)Ljava/lang/Object;");
+    jstring jSvcName = env->NewStringUTF("clipboard");
+    jobject clipMgr = env->CallObjectMethod(ctx, midGetSys, jSvcName);
+    env->DeleteLocalRef(jSvcName);
+    env->DeleteLocalRef(clsCtx);
+
+    if (!clipMgr || env->ExceptionCheck()) {
+        env->ExceptionClear();
+        if (attached) g_jvm->DetachCurrentThread();
+        return "";
+    }
+
+    // clipMgr.getPrimaryClip()
+    jclass clsClipMgr = env->GetObjectClass(clipMgr);
+    jmethodID midGetPrimary = env->GetMethodID(clsClipMgr, "getPrimaryClip",
+                                                "()Landroid/content/ClipData;");
+    jobject clipData = env->CallObjectMethod(clipMgr, midGetPrimary);
+    env->DeleteLocalRef(clsClipMgr);
+
+    if (!clipData || env->ExceptionCheck()) {
+        env->ExceptionClear();
+        if (attached) g_jvm->DetachCurrentThread();
+        return "";
+    }
+
+    // clipData.getItemAt(0)
+    jclass clsClipData = env->GetObjectClass(clipData);
+    jmethodID midGetItem = env->GetMethodID(clsClipData, "getItemAt",
+                                             "(I)Landroid/content/ClipData$Item;");
+    jobject item = env->CallObjectMethod(clipData, midGetItem, (jint)0);
+    env->DeleteLocalRef(clsClipData);
+
+    if (!item || env->ExceptionCheck()) {
+        env->ExceptionClear();
+        if (attached) g_jvm->DetachCurrentThread();
+        return "";
+    }
+
+    // item.getText().toString()
+    jclass clsItem = env->GetObjectClass(item);
+    jmethodID midGetText = env->GetMethodID(clsItem, "getText",
+                                             "()Ljava/lang/CharSequence;");
+    jobject charSeq = env->CallObjectMethod(item, midGetText);
+    env->DeleteLocalRef(clsItem);
+
+    if (!charSeq || env->ExceptionCheck()) {
+        env->ExceptionClear();
+        if (attached) g_jvm->DetachCurrentThread();
+        return "";
+    }
+
+    jclass clsCS = env->GetObjectClass(charSeq);
+    jmethodID midToStr = env->GetMethodID(clsCS, "toString", "()Ljava/lang/String;");
+    jstring jText = (jstring)env->CallObjectMethod(charSeq, midToStr);
+    env->DeleteLocalRef(clsCS);
+    env->DeleteLocalRef(charSeq);
+
+    if (jText && !env->ExceptionCheck()) {
+        result = jstr2str(env, jText);
+    } else {
+        env->ExceptionClear();
+    }
+
+    if (attached) g_jvm->DetachCurrentThread();
+    return result;
+}
+
 // Obtém JNIEnv para o thread atual (attach se necessário)
 static JNIEnv* getEnv(bool* attached) {
     *attached = false;
@@ -616,7 +697,53 @@ void DrawKeyUI() {
                            "  Como ativar:");
         ImGui::Spacing();
 
-        // Passo 1
+        // ── Botão COLAR (método principal: clipboard) ──
+        ImGui::Spacing();
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.10f, 0.36f, 0.10f, 0.90f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.15f, 0.55f, 0.15f, 1.00f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.20f, 0.70f, 0.20f, 1.00f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 7.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0.0f, 11.0f));
+        if (ImGui::Button("  COLAR KEY DO CLIPBOARD  ", ImVec2(panW - 52.0f, 0.0f))) {
+            std::string clip = getClipboardText();
+            // Limpar e deixar só uppercase sem espaços
+            std::string key;
+            for (char c : clip) {
+                if (c == ' ' || c == '\n' || c == '\r' || c == '\t') continue;
+                if (c >= 'a' && c <= 'z') c -= 32;
+                key += c;
+            }
+            if (key.size() >= 10) {
+                submitKey(key.c_str());
+            }
+        }
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor(3);
+
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.39f, 0.41f, 0.47f, 1.0f),
+                           "  Copie sua key e toque no botao acima.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // ── Alternativa: arquivo no sdcard ──
+        ImGui::TextColored(ImVec4(0.55f, 0.57f, 0.64f, 1.0f),
+                           "  Ou coloque o arquivo jawm.key em:");
+        const std::string& extDir = cachedExternalFilesDir();
+        if (!extDir.empty()) {
+            char keyPath[512];
+            snprintf(keyPath, sizeof(keyPath), "%s/jawm.key", extDir.c_str());
+            ImGui::TextColored(ImVec4(0.0f, 0.65f, 0.85f, 1.0f), "  %s", keyPath);
+        } else {
+            ImGui::TextColored(ImVec4(0.0f, 0.65f, 0.85f, 1.0f),
+                               "  /sdcard/Download/jawm.key");
+        }
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Passo 1 (dica compacta)
         ImGui::TextColored(ImVec4(0.51f, 0.31f, 1.0f, 1.0f), "  1.");
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f),
