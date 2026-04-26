@@ -132,6 +132,55 @@ LOCAL_STATIC_LIBRARIES := dobby
 include $(BUILD_SHARED_LIBRARY)
 
 # ============================================================
+# MODULE 3b: libgl2_unified.so — SISTEMA UNIFICADO (no-root)
+# ============================================================
+# Contém TUDO: GameHook (VMT) + EGL hook + ImGui + Key Validator
+# Injetar no APK do Free Fire via patch smali (System.loadLibrary)
+# Sem APK de overlay separado. Menu abre com Volume DOWN.
+# ============================================================
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := gl2_unified
+
+UNIFIED_CFLAGS := -w -Wno-error=format-security -fvisibility=hidden -fpermissive -fexceptions
+UNIFIED_CFLAGS += -DNOROOT_BUILD -DUNIFIED_BUILD
+
+LOCAL_CFLAGS   := $(UNIFIED_CFLAGS)
+LOCAL_CPPFLAGS := -w -Wno-error=format-security -fvisibility=hidden -Werror -std=c++17
+LOCAL_CPPFLAGS += -Wno-error=c++11-narrowing -fpermissive -Wall -fexceptions
+LOCAL_CPPFLAGS += $(UNIFIED_CFLAGS)
+LOCAL_LDFLAGS  += -Wl,--gc-sections,--strip-debug
+LOCAL_LDLIBS   := -llog -landroid -lEGL -lGLESv3
+LOCAL_ARM_MODE := arm
+
+LOCAL_C_INCLUDES := $(LOCAL_PATH)
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/ImGui
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/ImGui/backends
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/ImGui/font
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Utils
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Utils/Unity
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Hook/Dobby
+
+# GameHook: VMT hook + SharedMemory + Aimbot + ESP data collector
+# inject.cpp: JNI_OnLoad + anti-debug + EGL hook startup
+# egl_hook.cpp: eglSwapBuffers hook + ImGui render + touch input
+# key_validator.cpp: HTTP key validation via JNI + UI
+# main.cpp: DrawESP + DrawMenu (sem shmReaderLoop em UNIFIED_BUILD)
+# ImGui: rendering backend
+UNIFIED_FILES := $(LOCAL_PATH)/GameHook.cpp
+UNIFIED_FILES += $(LOCAL_PATH)/inject.cpp
+UNIFIED_FILES += $(LOCAL_PATH)/egl_hook.cpp
+UNIFIED_FILES += $(LOCAL_PATH)/key_validator.cpp
+UNIFIED_FILES += $(LOCAL_PATH)/main.cpp
+UNIFIED_FILES += $(wildcard $(LOCAL_PATH)/src/ImGui/*.cpp*)
+UNIFIED_FILES += $(wildcard $(LOCAL_PATH)/src/ImGui/backends/*.cpp*)
+
+LOCAL_SRC_FILES := $(UNIFIED_FILES:$(LOCAL_PATH)/%=%)
+LOCAL_STATIC_LIBRARIES := dobby
+
+include $(BUILD_SHARED_LIBRARY)
+
+# ============================================================
 # MODULE 4: libinjector.so — PTRACE INJECTOR (fallback)
 # ============================================================
 

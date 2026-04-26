@@ -64,6 +64,14 @@
 extern void* hack_thread(void*);
 extern bool  g_hookStarted;
 
+// ── JavaVM global — necessário para key_validator.cpp fazer HTTP via JNI ──────
+// Declarado em key_validator.h, definido lá. Preenchido em JNI_OnLoad abaixo.
+#ifdef UNIFIED_BUILD
+#include "key_validator.h"
+// installEglHook() declarado em egl_hook.cpp
+extern void installEglHook();
+#endif
+
 // ── Shared SHM fd (preenchido pelo Zygisk em root mode) ──────────────────────
 // Em no-root, este fd fica -1 e shm_create_file() cria o arquivo diretamente.
 #ifndef ZYGISK_BUILD
@@ -159,7 +167,7 @@ static void* inj_startupThread(void*) {
 // Este é o entry point principal no modo NO-ROOT
 // ============================================================
 extern "C" JNIEXPORT jint JNICALL
-JNI_OnLoad(JavaVM* /*vm*/, void* /*reserved*/) {
+JNI_OnLoad(JavaVM* vm, void* /*reserved*/) {
     ILOG("JNI_OnLoad_inject: pid=%d uid=%d", getpid(), getuid());
 
     // Anti-debug imediato (antes de qualquer coisa)
@@ -171,11 +179,28 @@ JNI_OnLoad(JavaVM* /*vm*/, void* /*reserved*/) {
         return JNI_VERSION_1_6;
     }
 
+#ifdef UNIFIED_BUILD
+    // Salvar JavaVM para key_validator.cpp usar nas requisições HTTP
+    g_jvm = vm;
+#endif
+
     if (!g_hookStarted) {
         pthread_t t;
         pthread_create(&t, nullptr, inj_startupThread, nullptr);
         pthread_detach(t);
     }
+
+#ifdef UNIFIED_BUILD
+    // Instalar EGL hook em thread separada (após o jogo carregar OpenGL)
+    {
+        pthread_t eglT;
+        pthread_create(&eglT, nullptr, [](void*) -> void* {
+            installEglHook();
+            return nullptr;
+        }, nullptr);
+        pthread_detach(eglT);
+    }
+#endif
 
     return JNI_VERSION_1_6;
 }

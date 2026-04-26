@@ -163,10 +163,23 @@ static int32_t triggerKey       = 0;
 static bool drawHeadDot         = true;
 
 // SharedMemory (leitura do hook injetado no jogo)
-static SharedESPData* sharedData = nullptr;
-static int shmFd = -1;
-static std::atomic<bool> shmConnected{false};
-static uint32_t lastWriteSeq = 0;
+// ── SharedMemory ────────────────────────────────────────────────────────────
+// UNIFIED_BUILD: sharedData vem do GameHook.cpp (mesmo processo, sem IPC)
+// Modo padrão (overlay externo): usa mmap de arquivo para leitura IPC
+#ifdef UNIFIED_BUILD
+  extern SharedESPData* sharedData;
+  static inline bool isShmReady() {
+      return sharedData && sharedData->magic == 0xDEADF00D;
+  }
+#else
+  static SharedESPData* sharedData = nullptr;
+  static int shmFd = -1;
+  static std::atomic<bool> shmConnected{false};
+  static uint32_t lastWriteSeq = 0;
+  static inline bool isShmReady() {
+      return sharedData && shmConnected.load() && sharedData->magic == 0xDEADF00D;
+  }
+#endif
 
 // Game package â€” para encontrar SHM no data dir do jogo
 #define GAME_PACKAGE_STR ((char*)OBFUSCATE("com.dts.freefireth"))
@@ -179,6 +192,7 @@ static std::atomic<bool> readerRunning{false};
 static pthread_t readerThread = 0;
 static char shmStatus[256] = "Iniciando...";
 
+#ifndef UNIFIED_BUILD
 void* shmReaderLoop(void*) {
     int attempt = 0;
     MLOGI("shmReaderLoop started (build: v7-fixed-paths)");
@@ -281,11 +295,13 @@ void* shmReaderLoop(void*) {
     return nullptr;
 }
 
+#endif // UNIFIED_BUILD
+
 // ============================================================
 // Draw ESP â€” LÃª direto do SharedMemory (sem cÃ³pia)
 // ============================================================
 void DrawESP(int screenW, int screenH) {
-    if (!sharedData || !shmConnected.load()) return;
+    if (!isShmReady()) return;
 
     // Sincronizar configuraÃ§Ãµes de aimbot com shared memory
     sharedData->espEnabled            = 1;
@@ -1240,6 +1256,7 @@ void onOverlayDraw(int screenW, int screenH) {
     DrawMenu();
 }
 
+#ifndef UNIFIED_BUILD
 // ============================================================
 // JNI - Chamados pelo OverlayService.java
 // ============================================================
@@ -1325,3 +1342,4 @@ JNI_OnLoad(JavaVM* vm, void*) {
 }
 
 } // extern "C"
+#endif // UNIFIED_BUILD
