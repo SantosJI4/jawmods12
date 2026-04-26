@@ -648,6 +648,11 @@ static void* hotkeyThread(void*) {
         // Se triggerKey estÃ¡ configurado, essa tecla faz "hold-to-aim".
         // Tecla de trigger nÃ£o aciona toggles de features.
         // â”€â”€ Toggles normais sÃ³ em key-press (value==1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // Trigger key: press/hold=1 ativa, release=0 desativa
+        if (triggerKey > 0 && ev.code == (uint16_t)triggerKey) {
+            if (sharedData) sharedData->triggerHeld = (ev.value >= 1) ? 1 : 0;
+            continue;
+        }
         if (ev.value != 1) continue;
         if (hotkeyEsp > 0 && ev.code == (uint16_t)hotkeyEsp)
             esp = !esp;

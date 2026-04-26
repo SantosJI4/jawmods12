@@ -634,7 +634,15 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
 
         // â”€â”€ Aimbot: Head direct snap + SLERP suave â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Ativa se: (alwaysTrack ligado) OU (triggerHeld com triggerKey configurado)
-        bool triggerActive = (sharedData->triggerKey > 0 && sharedData->triggerHeld);
+        bool triggerActive;
+        if (sharedData->triggerKey == 0) {
+            // Sem tecla configurada: ativa quando o player esta atirando no jogo
+            triggerActive = fn_IsFiring ? fn_IsFiring(self, nullptr) : true;
+        } else {
+            // Com tecla configurada: IsFiring OU tecla fisica segurada
+            bool isFiring = fn_IsFiring ? fn_IsFiring(self, nullptr) : false;
+            triggerActive = isFiring || (sharedData->triggerHeld > 0);
+        }
         bool shouldAim = sharedData->aimbotAlwaysTrack || triggerActive;
 
         if (g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position &&
