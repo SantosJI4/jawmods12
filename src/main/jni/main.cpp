@@ -40,6 +40,7 @@
 
 #include "Overlay.h"
 #include "SharedData.h"
+#include "obfuscate.h"
 
 #include <android/log.h>
 #include <sys/socket.h>
@@ -50,8 +51,16 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <linux/input.h>
-#define MTAG "MeowESP"
-#define MLOGI(...) __android_log_print(ANDROID_LOG_INFO, MTAG, __VA_ARGS__)
+
+// ── Log Control ─────────────────────────────────────────────────────────────
+// Em RELEASE: sem logs (sem rastros no logcat para o anti-cheat escanear)
+// Descomentar OVERLAY_DEBUG para ativar logs temporariamente
+// #define OVERLAY_DEBUG
+#ifdef OVERLAY_DEBUG
+  #define MLOGI(...) __android_log_print(ANDROID_LOG_INFO, "OVL", __VA_ARGS__)
+#else
+  #define MLOGI(...) ((void)0)
+#endif
 
 // ============================================================
 // ESP State
@@ -160,7 +169,7 @@ static std::atomic<bool> shmConnected{false};
 static uint32_t lastWriteSeq = 0;
 
 // Game package â€” para encontrar SHM no data dir do jogo
-#define GAME_PACKAGE "com.dts.freefireth"
+#define GAME_PACKAGE_STR ((char*)OBFUSCATE("com.dts.freefireth"))
 
 // ============================================================
 // SharedMemory Reader â€” Conecta ao arquivo criado pelo hook
@@ -177,7 +186,7 @@ void* shmReaderLoop(void*) {
     // Paths para tentar: /data/local/tmp/ PRIMEIRO (o hook comprovou que funciona la)
     // game dir como fallback (pode falhar por SELinux/namespace)
     char gameShmPath[512];
-    snprintf(gameShmPath, sizeof(gameShmPath), "/data/data/%s/%s", GAME_PACKAGE, SHM_FILENAME);
+    snprintf(gameShmPath, sizeof(gameShmPath), "/data/data/%s/%s", GAME_PACKAGE_STR, (char*)OBFUSCATE(".gl_cache"));
     const char* paths[] = { SHM_PATH_1, gameShmPath, SHM_PATH_2 };
     const int numPaths = 3;
 
@@ -474,8 +483,8 @@ void DrawESP(int screenW, int screenH) {
 // Hook Log Reader â€” lÃª o arquivo de log do hook para diagnostico
 // Tenta: game dir, /data/local/tmp/, /sdcard/
 // ============================================================
-#define HOOK_LOG_PATH_1 "/data/local/tmp/.gl_log"
-#define HOOK_LOG_PATH_2 "/sdcard/.gl_log"
+#define HOOK_LOG_PATH_1 ((char*)OBFUSCATE("/data/local/tmp/.gl_log"))
+#define HOOK_LOG_PATH_2 ((char*)OBFUSCATE("/sdcard/.gl_log"))
 static char hookLogBuf[2048] = "Nenhum log do hook";
 static time_t hookLogLastRead = 0;
 
@@ -487,7 +496,7 @@ static void readHookLog() {
 
     // Paths: /data/local/tmp/ PRIMEIRO (onde o hook escreve)
     char gameLogPath[512];
-    snprintf(gameLogPath, sizeof(gameLogPath), "/data/data/%s/%s", GAME_PACKAGE, HOOKLOG_FILENAME);
+    snprintf(gameLogPath, sizeof(gameLogPath), "/data/data/%s/%s", GAME_PACKAGE_STR, (char*)OBFUSCATE(".gl_log"));
     const char* paths[] = { HOOK_LOG_PATH_1, gameLogPath, HOOK_LOG_PATH_2 };
     for (int i = 0; i < 3; i++) {
         int fd = open(paths[i], O_RDONLY);
@@ -510,7 +519,7 @@ static void readHookLog() {
 // ============================================================
 // Config â€” persiste em /data/local/tmp/.jawmods_cfg
 // ============================================================
-#define JAW_CONFIG_PATH  "/data/local/tmp/.jawmods_cfg"
+#define JAW_CONFIG_PATH  ((char*)OBFUSCATE("/data/local/tmp/.jawmods_cfg"))
 #define JAW_CONFIG_MAGIC 0x4A41570Eu  // "JAW" v14 - movement prediction
 
 #pragma pack(push, 1)
@@ -586,8 +595,8 @@ static void loadConfig() {
 // Server Status Check â€” TCP connect ao servidor jawmods
 // Atualizar SERVER_CHECK_HOST se a URL do SquareCloud mudar.
 // ============================================================
-#define SERVER_CHECK_HOST "jawmods-key-server.squareweb.app"
-#define SERVER_CHECK_PORT "443"
+#define SERVER_CHECK_HOST ((char*)OBFUSCATE("jawmods-key-server.squareweb.app"))
+#define SERVER_CHECK_PORT ((char*)OBFUSCATE("443"))
 
 static std::atomic<bool> g_serverOnline{false};
 static char g_serverStatus[64] = "Verificando...";
@@ -847,9 +856,9 @@ void DrawMenu() {
     }
     ImGui::SameLine(0.0f, 4.0f);
     if (ImGui::Button(menuMinimized ? "+" : "-", ImVec2(22,22)))
-        menuMinimized = !menuMinimized;
-    ImGui::PopStyleVar();
-    ImGui::PopStyleColor(3);
+            menuMinimized = !menuMinimized;
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
 
     if (menuMinimized) {
         ImGui::End();
@@ -860,8 +869,8 @@ void DrawMenu() {
 
     // â”€â”€ TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     static int activeTab = 0;
-    const char* tabNames[] = { "ESP", "AIM", "MISC" };
-    const int   numTabs    = 3;
+    const char* tabNames[] = { "ESP", "AIM", "MISC", "SEC" };
+    const int   numTabs    = 4;
 
     dl->AddRectFilled(
         ImVec2(wpos.x, wpos.y+HEADER_H),
@@ -943,7 +952,7 @@ void DrawMenu() {
     if (activeTab == 0) {
         SectionHeader("VISIBILIDADE");
         ToggleRow("ESP Ligado",     &esp);
-        ImGui::Spacing();
+            ImGui::Spacing();
         ToggleRow("Caixas",         &drawEnemyBox);
         ImGui::Spacing();
         ToggleRow("Snaplines",      &drawSnapLine);
@@ -976,7 +985,7 @@ void DrawMenu() {
     if (activeTab == 1) {
         SectionHeader("AIMBOT");
         ToggleRow("Aimbot Ligado", &aimbotEnabled);
-        ImGui::Spacing();
+            ImGui::Spacing();
 
         if (aimbotEnabled) {
             // Status
@@ -991,7 +1000,7 @@ void DrawMenu() {
                 ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 4.0f);
                 Pill("HOLD TRIGGER", IM_COL32(50,50,80,200), cTextDim);
             }
-            ImGui::Spacing();
+                ImGui::Spacing();
         }
 
         SectionHeader("CONFIGURACOES");
@@ -999,20 +1008,20 @@ void DrawMenu() {
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 12.0f);
         ImGui::SliderFloat("##afov", &aimbotFovDeg, 5.0f, 180.0f, "%.0f");
 
-        ImGui::Spacing();
+                ImGui::Spacing();
         ImGui::TextColored(cv4Dim, "Suavidade");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 12.0f);
         ImGui::SliderFloat("##asmooth", &aimbotSmooth, 0.0f, 0.95f, "%.2f");
 
         SectionHeader("OPCOES");
         ToggleRow("Rastrear Sempre", &aimbotAlwaysTrack);
-        ImGui::Spacing();
+                ImGui::Spacing();
         ToggleRow("Ignorar Knocked", &aimbotIgnoreKnocked);
-        ImGui::Spacing();
+                ImGui::Spacing();
         ToggleRow("Atravessar Paredes", &aimbotThroughWalls);
-        ImGui::Spacing();
+                    ImGui::Spacing();
         ToggleRow("Magic Bullet", &magicBulletEnabled);
-        ImGui::Spacing();
+                ImGui::Spacing();
         ImGui::TextColored(cv4Dim, "Predicao de Movimento (ms)");
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 12.0f);
         ImGui::SliderFloat("##apred", &aimbotPrediction, 0.0f, 150.0f, "%.0f ms");
@@ -1029,7 +1038,7 @@ void DrawMenu() {
         ImGui::SameLine(0.0f, 6.0f);
         if (!g_recordingActive) {
             if (ImGui::Button("Gravar", ImVec2(bw2, 26))) startRecording();
-        } else {
+                } else {
             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f,0.15f,0.15f,0.9f));
             if (ImGui::Button("Parar", ImVec2(bw2, 26)))  stopRecording();
             ImGui::PopStyleColor();
@@ -1060,6 +1069,102 @@ void DrawMenu() {
         ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 12.0f);
         ImGui::InputTextMultiline("##hooklog", hookLogBuf, sizeof(hookLogBuf),
             ImVec2(-1.0f, 100.0f), ImGuiInputTextFlags_ReadOnly);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // TAB: SEC (Segurança / Stealth)
+    // ════════════════════════════════════════════════════════════════
+    if (activeTab == 3) {
+        SectionHeader("STATUS STEALTH");
+
+        // ── Log mode ────────────────────────────────────────────────
+        float fw2 = ImGui::GetContentRegionAvail().x - 12.0f;
+        ImGui::TextColored(cv4Dim, "Modo Log:");
+        ImGui::SameLine(fw2 * 0.45f);
+#ifdef STEALTH_DEBUG
+        Pill("VERBOSO", IM_COL32(200,120,20,220), cBg);
+#else
+        Pill("STEALTH", IM_COL32(0,180,90,220), cBg);
+#endif
+        ImGui::Spacing();
+
+        // ── Log overlay ─────────────────────────────────────────────
+        ImGui::TextColored(cv4Dim, "Log Overlay:");
+        ImGui::SameLine(fw2 * 0.45f);
+#ifdef OVERLAY_DEBUG
+        Pill("VISIVEL", IM_COL32(200,120,20,220), cBg);
+#else
+        Pill("OCULTO", IM_COL32(0,180,90,220), cBg);
+#endif
+        ImGui::Spacing();
+
+        // ── Anti-debug (runtime check) ───────────────────────────────
+        static float secCheckTimer = 0.0f;
+        static bool  secDebugDetected = false;
+        static bool  secFridaDetected = false;
+        secCheckTimer += ImGui::GetIO().DeltaTime;
+        if (secCheckTimer > 3.0f) {
+            secCheckTimer = 0.0f;
+            // Leitura /proc/self/status TracerPid
+            FILE* sf = fopen("/proc/self/status", "r");
+            secDebugDetected = false;
+            if (sf) {
+                char sbuf[128];
+                while (fgets(sbuf, sizeof(sbuf), sf)) {
+                    if (strncmp(sbuf, "TracerPid:", 10) == 0) {
+                        secDebugDetected = (atoi(sbuf+10) != 0);
+                        break;
+                    }
+                }
+                fclose(sf);
+            }
+            // Frida: busca em /proc/self/maps
+            FILE* mf = fopen("/proc/self/maps", "r");
+            secFridaDetected = false;
+            if (mf) {
+                char mbuf[512];
+                while (fgets(mbuf, sizeof(mbuf), mf)) {
+                    if (strstr(mbuf, "frida") || strstr(mbuf, "gadget")) {
+                        secFridaDetected = true; break;
+                    }
+                }
+                fclose(mf);
+            }
+        }
+        ImGui::TextColored(cv4Dim, "Debugger:");
+        ImGui::SameLine(fw2 * 0.45f);
+        if (secDebugDetected)
+            Pill("DETECTADO!", IM_COL32(220,40,40,220), cBg);
+        else
+            Pill("LIMPO", IM_COL32(0,180,90,220), cBg);
+        ImGui::Spacing();
+
+        ImGui::TextColored(cv4Dim, "Frida:");
+        ImGui::SameLine(fw2 * 0.45f);
+        if (secFridaDetected)
+            Pill("DETECTADO!", IM_COL32(220,40,40,220), cBg);
+        else
+            Pill("LIMPO", IM_COL32(0,180,90,220), cBg);
+        ImGui::Spacing();
+
+        SectionHeader("OFUSCACAO");
+        ImGui::TextColored(cv4Dim, "Strings: XOR Compiletime");
+        ImGui::Spacing();
+        ImGui::TextColored(cv4Dim, "Offsets: Runtime calc");
+        ImGui::Spacing();
+        ImGui::TextColored(cv4Dim, "Thread: Binder alias");
+        ImGui::Spacing();
+        ImGui::TextColored(cv4Dim, "Logs:   Desativados");
+
+        SectionHeader("INFORMACOES");
+        ImGui::TextColored(cv4Dim, "Build:");
+        ImGui::SameLine();
+        ImGui::TextColored(cv4Violet, "v61-stealth");
+        if (shmReady) {
+            ImGui::TextColored(cv4Dim, "SHM:");
+            ImGui::SameLine();
+            ImGui::TextColored(cv4Green, "ATIVO");
+        }
     }
 
     ImGui::PopItemWidth();

@@ -46,7 +46,7 @@
 // STEALTH CONFIG â€” desativar logging e traces em release
 // Comentar a linha abaixo para build de RELEASE (sem log)
 // ============================================================
-#define STEALTH_DEBUG  // â† DESCOMENTADO = modo debug com logs
+// #define STEALTH_DEBUG  // comentar para RELEASE (sem logs/arquivos forenses)
 
 #ifdef STEALTH_DEBUG
   #define HOOK_TAG "GameHook"
@@ -111,12 +111,11 @@ static void hideFromMaps() {
     struct { uintptr_t start; uintptr_t end; int prot; } segs[8];
     int nsegs = 0;
 
-    FILE *maps = fopen("/proc/self/maps", "r");
+    FILE *maps = fopen(OBFUSCATE("/proc/self/maps"), "r");
     if (!maps) return;
 
     while (fgets(line, sizeof(line), maps) && nsegs < 8) {
-        // Procurar por libgl2.so (nosso .so injetado)
-        if (!strstr(line, "libgl2.so")) continue;
+        if (!strstr(line, OBFUSCATE("libgl2.so"))) continue;
 
         uintptr_t start, end;
         char perms[5] = {0};
@@ -168,6 +167,53 @@ static void hideFromMaps() {
     }
 
     LOGI("hideFromMaps: %d segmentos remapeados como anonimos", nsegs);
+}
+
+// ============================================================
+// ANTI-DEBUG — detecta debugger e ferramentas de análise
+// ============================================================
+
+// Retorna true se TracerPid != 0 (processo sendo debugado)
+static bool isBeingDebugged() {
+    FILE* f = fopen(OBFUSCATE("/proc/self/status"), "r");
+    if (!f) return false;
+    char buf[256];
+    bool traced = false;
+    while (fgets(buf, sizeof(buf), f)) {
+        if (strncmp(buf, "TracerPid:", 10) == 0) {
+            traced = (atoi(buf + 10) != 0);
+            break;
+        }
+    }
+    fclose(f);
+    return traced;
+}
+
+// Detecta Frida: procura por frida-agent ou gadget no /proc/self/maps
+static bool detectFrida() {
+    FILE* f = fopen(OBFUSCATE("/proc/self/maps"), "r");
+    if (!f) return false;
+    char buf[512];
+    bool found = false;
+    // Strings que identificam Frida — XOR manual para não aparecerem juntas no binário
+    // "frida" = 66 72 69 64 61, "gadget" = 67 61 64 67 65 74
+    while (fgets(buf, sizeof(buf), f)) {
+        if (strstr(buf, OBFUSCATE("frida-agent")) ||
+            strstr(buf, OBFUSCATE("frida-gadget")) ||
+            strstr(buf, OBFUSCATE("re.frida"))) {
+            found = true;
+            break;
+        }
+    }
+    fclose(f);
+    return found;
+}
+
+// Retorna true se ambiente é seguro (sem debugger nem Frida)
+static bool isSafeEnv() {
+    if (isBeingDebugged()) return false;
+    if (detectFrida())     return false;
+    return true;
 }
 
 // ============================================================
@@ -693,12 +739,12 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
         // Aimbot suave: nao rodar se Magic Bullet ja aplicou rotacao neste frame
         if (!magicBulletFired && g_aimbotHasLock && fn_SetAimRotation && g_camTransform && fn_get_position &&
             sharedData->aimbotEnabled && shouldAim && !isBusy) {
-            Vector3 camPos = fn_get_position(g_camTransform, nullptr);
-            if (!std::isnan(camPos.x) && !std::isnan(camPos.y) && !std::isnan(camPos.z)) {
+                Vector3 camPos = fn_get_position(g_camTransform, nullptr);
+                if (!std::isnan(camPos.x) && !std::isnan(camPos.y) && !std::isnan(camPos.z)) {
                 float dx = g_aimbotLockedHeadPos.x - camPos.x;
                 float dy = g_aimbotLockedHeadPos.y - camPos.y;
                 float dz = g_aimbotLockedHeadPos.z - camPos.z;
-                float len = sqrtf(dx*dx + dy*dy + dz*dz);
+                    float len = sqrtf(dx*dx + dy*dy + dz*dz);
                 if (len >= 0.1f) {
                     Quaternion targetQ = LookQuatFromDir(dx, dy, dz);
                     float smooth = sharedData->aimbotSmooth;
@@ -1033,7 +1079,7 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
                         g_predPrevHeadPos   = aimbotHeadPos;
                         g_predPrevTime      = g_frameCurrentMs;
                         g_aimbotLockedHeadPos = aimbotHeadPos;
-                    } else {
+                } else {
                         // Alvo atual: calcular velocidade suavizada (EMA alpha=0.4)
                         float dtMs = (float)(g_frameCurrentMs - g_predPrevTime);
                         if (dtMs > 0.5f && dtMs < 60.0f) {
@@ -1106,8 +1152,8 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
 // ============================================================
 
 void* hack_thread(void*) {
-    // Esconder nome da thread (anti-cheat enumera threads)
-    prctl(PR_SET_NAME, "Binder:default", 0, 0, 0);
+    // Esconder nome da thread (anti-cheat enumera threads por nome)
+    prctl(PR_SET_NAME, (char*)OBFUSCATE("Binder:default"), 0, 0, 0);
 
     // â”€â”€ Criar SHM IMEDIATAMENTE (Zygisk: fd jÃ¡ disponÃ­vel como root) â”€â”€
     // Garante sharedData != null durante todos os stage markers abaixo.
@@ -1129,7 +1175,7 @@ void* hack_thread(void*) {
     LOGI("Hook thread iniciada, aguardando libil2cpp.so...");
 
     // â”€â”€ Aguardar il2cpp carregar â”€â”€
-    while (!isLibraryLoaded("libil2cpp.so")) {
+    while (!isLibraryLoaded(OBFUSCATE("libil2cpp.so"))) {
         if (sharedData) sharedData->debugLastCall = 2; // stage 2: waiting libil2cpp
         sleep(1);
     }
@@ -1141,7 +1187,7 @@ void* hack_thread(void*) {
     // No Android ARM64, o primeiro mapeamento Ã© r--p offset=0 = load base.
     // Os offsets do il2cppdumper (RVA) sÃ£o relativos a esse endereÃ§o.
     if (sharedData) sharedData->debugLastCall = 3; // stage 3: libil2cpp found
-    uintptr_t il2cpp_base = findLibrary("libil2cpp.so");
+    uintptr_t il2cpp_base = findLibrary(OBFUSCATE("libil2cpp.so"));
     g_il2cpp_base = il2cpp_base;
     if (!il2cpp_base) {
         if (sharedData) sharedData->debugLastCall = 93; // stage 93: base=0 error
@@ -1541,6 +1587,11 @@ __attribute__((constructor))
 void lib_main() {
     LOGI("lib_main() LOADED [%s] pid=%d uid=%d", HOOK_BUILD_VER, getpid(), getuid());
 
+    // Anti-debug: se detectar debugger ou Frida, comportamento silencioso
+#ifndef STEALTH_DEBUG
+    if (isBeingDebugged() || detectFrida()) return;
+#endif
+
     // hideFromMaps() DESATIVADO: causa crash por race condition.
     // mmap(MAP_FIXED) sobre r-- zera rodata durante a janela de restauracao.
     // Codigo acessando string literals nesse instante = leitura de zeros = crash.
@@ -1549,14 +1600,14 @@ void lib_main() {
 
     // Verificar se estamos no processo do jogo
     char cmdline[256] = {0};
-    FILE *f = fopen("/proc/self/cmdline", "r");
+    FILE *f = fopen(OBFUSCATE("/proc/self/cmdline"), "r");
     if (f) { fread(cmdline, 1, 255, f); fclose(f); }
 
     LOGI("lib_main() cmdline=[%s]", cmdline);
 
-    if (strstr(cmdline, "freefireth") == nullptr &&
-        strstr(cmdline, "freefire") == nullptr &&
-        strstr(cmdline, "sniper3d") == nullptr) {
+    if (strstr(cmdline, OBFUSCATE("freefireth")) == nullptr &&
+        strstr(cmdline, OBFUSCATE("freefire")) == nullptr &&
+        strstr(cmdline, OBFUSCATE("sniper3d")) == nullptr) {
         LOGI("lib_main() skipping (not game process)");
         return;
     }

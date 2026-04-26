@@ -61,10 +61,40 @@ LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Utils
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Utils/Unity
 LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Hook/Dobby
 
-# Sources - GameHook only (direct offsets, no ByNameModding)
+# Sources - GameHook + inject entry point
 HOOK_FILES := $(LOCAL_PATH)/GameHook.cpp
+HOOK_FILES += $(LOCAL_PATH)/inject.cpp
 
 LOCAL_SRC_FILES := $(HOOK_FILES:$(LOCAL_PATH)/%=%)
+LOCAL_STATIC_LIBRARIES := dobby
+
+include $(BUILD_SHARED_LIBRARY)
+
+# ============================================================
+# MODULE 2b: libgl2_noroot.so — VERSÃO NO-ROOT do HOOK
+# Para injetar direto no APK do jogo sem Magisk/Zygisk
+# Compilar com -DNOROOT_BUILD para ativar o constructor de inject.cpp
+# ============================================================
+
+include $(CLEAR_VARS)
+LOCAL_MODULE := gl2_noroot
+
+LOCAL_CFLAGS := -w -Wno-error=format-security -fvisibility=hidden -fpermissive -fexceptions -DNOROOT_BUILD
+LOCAL_CPPFLAGS := -w -Wno-error=format-security -fvisibility=hidden -Werror -std=c++17
+LOCAL_CPPFLAGS += -Wno-error=c++11-narrowing -fpermissive -Wall -fexceptions -DNOROOT_BUILD
+LOCAL_LDFLAGS += -Wl,--gc-sections,--strip-debug
+LOCAL_LDLIBS := -llog -landroid
+LOCAL_ARM_MODE := arm
+
+LOCAL_C_INCLUDES := $(LOCAL_PATH)
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Utils
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Utils/Unity
+LOCAL_C_INCLUDES += $(LOCAL_PATH)/include/Hook/Dobby
+
+NOROOT_FILES := $(LOCAL_PATH)/GameHook.cpp
+NOROOT_FILES += $(LOCAL_PATH)/inject.cpp
+
+LOCAL_SRC_FILES := $(NOROOT_FILES:$(LOCAL_PATH)/%=%)
 LOCAL_STATIC_LIBRARIES := dobby
 
 include $(BUILD_SHARED_LIBRARY)
