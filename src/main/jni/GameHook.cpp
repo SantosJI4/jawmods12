@@ -598,6 +598,7 @@ static void*   g_aimbotLockedTarget  = nullptr;   // alvo atualmente travado
 static Vector3 g_aimbotLockedHeadPos{};           // Ãºltima posiÃ§Ã£o vÃ¡lida da cabeÃ§a
 static bool    g_aimbotHasLock       = false;     // true = aimbot travado num alvo
 static float   g_aimbotBestDist      = 1e9f;      // melhor candidato deste frame
+static bool    g_aimbotJustLocked    = false;     // true = primeiro frame de novo lock -> snap instantaneo
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // ============================================================
