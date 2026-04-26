@@ -77,6 +77,8 @@ def status():
 def validate_key():
     data = request.get_json(silent=True)
     if not data or "key" not in data:
+        app.logger.warning("validate: missing json or key (Content-Type=%s len=%s)",
+                           request.content_type, request.content_length)
         return jsonify({"valid": False, "error": "Missing key"}), 400
 
     key_value = data["key"].strip().upper()
@@ -89,6 +91,7 @@ def validate_key():
 
     if not row:
         conn.close()
+        app.logger.info("validate fail: key not found %s", key_value[:12])
         return jsonify({"valid": False, "error": "Key not found"})
 
     # Check paused
@@ -108,10 +111,13 @@ def validate_key():
         conn.commit()
     elif row["hwid"] != hwid:
         conn.close()
+        app.logger.info("validate fail: hwid mismatch key=%s", key_value[:8])
         return jsonify({"valid": False, "error": "Key bound to another device"})
 
     remaining_seconds = int((expires_at - datetime.utcnow()).total_seconds())
     conn.close()
+
+    app.logger.info("validate ok key=%s hwid=%s", key_value[:8] + "...", hwid[:8] + "...")
 
     return jsonify({
         "valid": True,

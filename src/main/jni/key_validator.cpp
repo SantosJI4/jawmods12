@@ -378,6 +378,18 @@ static std::string httpPost(JNIEnv* env, const char* url, const char* jsonBody) 
 
 // ── JSON helpers ──────────────────────────────────────────────────────────────
 
+// Escapa " e \ para o corpo JSON não quebrar (ex.: modelo "Celular" com aspas)
+static std::string jsonEscape(const std::string& s) {
+    std::string o;
+    o.reserve(s.size() + 8);
+    for (unsigned char c : s) {
+        if (c < 32u) continue;
+        if (c == '"' || c == '\\') o += '\\';
+        o += (char)c;
+    }
+    return o;
+}
+
 static std::string jsonStr(const std::string& json, const char* key) {
     std::string search = std::string("\"") + key + "\":\"";
     size_t pos = json.find(search);
@@ -426,16 +438,15 @@ static void* validateThread(void* arg) {
     std::string androidId   = getAndroidId(env);
     std::string deviceModel = getDeviceModel(env);
 
-    char jsonBody[256];
-    snprintf(jsonBody, sizeof(jsonBody),
-             "{\"key\":\"%s\",\"android_id\":\"%s\",\"device_model\":\"%s\"}",
-             key, androidId.c_str(), deviceModel.c_str());
+    std::string jsonBody = std::string("{\"key\":\"") + jsonEscape(std::string(key))
+        + "\",\"android_id\":\"" + jsonEscape(androidId)
+        + "\",\"device_model\":\"" + jsonEscape(deviceModel) + "\"}";
 
     char serverUrl[128];
     snprintf(serverUrl, sizeof(serverUrl), "https://%s/validate",
              (char*)OBFUSCATE("jawmods.squareweb.app"));
 
-    std::string resp = httpPost(env, serverUrl, jsonBody);
+    std::string resp = httpPost(env, serverUrl, jsonBody.c_str());
     if (attached) g_jvm->DetachCurrentThread();
 
     if (resp.empty()) {
