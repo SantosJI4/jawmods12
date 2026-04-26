@@ -386,36 +386,97 @@ void submitKey(const char* key) {
     pthread_detach(t);
 }
 
-// Lê a key de um arquivo externo (colocado pelo usuário no sdcard)
-// Paths tentados (em ordem):
-//   /sdcard/jawm.key
-//   /sdcard/Download/jawm.key
-//   /storage/emulated/0/jawm.key
-static bool readKeyFromFile(char* outKey, int maxLen) {
-    const char* paths[] = {
-        "/sdcard/jawm.key",
-        "/sdcard/Download/jawm.key",
-        "/storage/emulated/0/jawm.key",
-    };
-    for (const char* path : paths) {
-        int fd = open(path, O_RDONLY);
-        if (fd < 0) continue;
-        char buf[64] = {};
-        int rd = read(fd, buf, sizeof(buf) - 1);
-        close(fd);
-        if (rd <= 0) continue;
-        // Remover whitespace/newline
-        int len = 0;
-        for (int i = 0; i < rd && len < maxLen - 1; i++) {
-            char c = buf[i];
-            if (c == '\n' || c == '\r' || c == ' ') continue;
-            // Converter para uppercase
-            if (c >= 'a' && c <= 'z') c -= 32;
-            outKey[len++] = c;
+// Obtém path do diretório externo da app via JNI
+// Retorna ex: /sdcard/Android/data/com.dts.freefireth/files
+// Garantidamente acessível pelo processo do jogo em todas as versões do Android
+static std::string getExternalFilesDir() {
+    bool attached = false;
+    JNIEnv* env = getEnv(&attached);
+    if (!env) return "";
+
+    std::string result;
+    jobject ctx = getAppContext(env);
+    if (ctx) {
+        jclass clsCtx = env->FindClass("android/content/Context");
+        if (clsCtx) {
+            jmethodID midGetExt = env->GetMethodID(clsCtx, "getExternalFilesDir",
+                                                    "(Ljava/lang/String;)Ljava/io/File;");
+            if (midGetExt) {
+                jobject fileObj = env->CallObjectMethod(ctx, midGetExt, nullptr);
+                if (fileObj && !env->ExceptionCheck()) {
+                    jclass clsFile = env->GetObjectClass(fileObj);
+                    jmethodID midGetPath = env->GetMethodID(clsFile, "getAbsolutePath",
+                                                             "()Ljava/lang/String;");
+                    jstring jPath = (jstring)env->CallObjectMethod(fileObj, midGetPath);
+                    result = jstr2str(env, jPath);
+                    env->DeleteLocalRef(fileObj);
+                    env->DeleteLocalRef(clsFile);
+                }
+            }
+            env->DeleteLocalRef(clsCtx);
         }
-        outKey[len] = '\0';
-        if (len >= 10) return true; // key mínima razoável
     }
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (attached) g_jvm->DetachCurrentThread();
+    return result;
+}
+
+// Cache do external files dir (evita chamar JNI todo frame)
+static std::string g_externalFilesDir;
+static bool        g_externalFilesDirLoaded = false;
+
+static const std::string& cachedExternalFilesDir() {
+    if (!g_externalFilesDirLoaded && g_jvm) {
+        g_externalFilesDir = getExternalFilesDir();
+        if (!g_externalFilesDir.empty()) g_externalFilesDirLoaded = true;
+    }
+    return g_externalFilesDir;
+}
+
+// Tenta ler uma linha limpa de um arquivo (remove newline/espaços, uppercase)
+static bool tryReadKeyFile(const char* path, char* outKey, int maxLen) {
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) return false;
+    char buf[64] = {};
+    int rd = read(fd, buf, sizeof(buf) - 1);
+    close(fd);
+    if (rd <= 0) return false;
+    int len = 0;
+    for (int i = 0; i < rd && len < maxLen - 1; i++) {
+        char c = buf[i];
+        if (c == '\n' || c == '\r' || c == ' ' || c == '\t') continue;
+        if (c >= 'a' && c <= 'z') c -= 32;
+        outKey[len++] = c;
+    }
+    outKey[len] = '\0';
+    return len >= 10;
+}
+
+// Lê a key de arquivo externo (colocado pelo usuário)
+// Paths em ordem de prioridade:
+//   1. /sdcard/Android/data/com.dts.freefireth/files/jawm.key  (GARANTIDO - via JNI)
+//   2. /sdcard/Download/jawm.key
+//   3. /sdcard/jawm.key
+//   4. /storage/emulated/0/jawm.key
+static bool readKeyFromFile(char* outKey, int maxLen) {
+    // 1. Path do external files dir da app (acessível sem root em qualquer Android)
+    const std::string& extDir = cachedExternalFilesDir();
+    if (!extDir.empty()) {
+        char path[512];
+        snprintf(path, sizeof(path), "%s/jawm.key", extDir.c_str());
+        if (tryReadKeyFile(path, outKey, maxLen)) return true;
+    }
+
+    // 2-4. Fallbacks para caminhos comuns
+    char dl[256], sdcard[256], emu[256];
+    snprintf(dl,     sizeof(dl),     "/sdcard/Download/jawm.key");
+    snprintf(sdcard, sizeof(sdcard), "/sdcard/jawm.key");
+    snprintf(emu,    sizeof(emu),    "/storage/emulated/0/jawm.key");
+
+    if (tryReadKeyFile(dl,     outKey, maxLen)) return true;
+    if (tryReadKeyFile(sdcard, outKey, maxLen)) return true;
+    if (tryReadKeyFile(emu,    outKey, maxLen)) return true;
+
     return false;
 }
 
@@ -566,8 +627,17 @@ void DrawKeyUI() {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.82f, 0.83f, 0.86f, 1.0f),
                            "Salve como:");
-        ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
-                           "       /sdcard/jawm.key");
+        // Mostrar o caminho real obtido via JNI (mais confiável)
+        const std::string& extDir = cachedExternalFilesDir();
+        if (!extDir.empty()) {
+            char keyPath[512];
+            snprintf(keyPath, sizeof(keyPath), "%s/jawm.key", extDir.c_str());
+            ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
+                               "  %s", keyPath);
+        } else {
+            ImGui::TextColored(ImVec4(0.0f, 0.80f, 1.0f, 1.0f),
+                               "  /sdcard/Download/jawm.key");
+        }
 
         // Passo 3
         ImGui::TextColored(ImVec4(0.51f, 0.31f, 1.0f, 1.0f), "  3.");
