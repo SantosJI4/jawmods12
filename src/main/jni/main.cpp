@@ -492,7 +492,9 @@ void DrawESP(int screenW, int screenH) {
             fovRadiusPx, circleColor, 64, 1.5f);
     }
 
+#ifndef UNIFIED_BUILD
     lastWriteSeq = seq;
+#endif
 }
 
 // ============================================================
@@ -753,7 +755,7 @@ void DrawMenu() {
     const ImVec4 cv4Text    = ImVec4(0.82f, 0.83f, 0.86f, 1.00f);
     const ImVec4 cv4Yellow  = ImVec4(1.00f, 0.78f, 0.20f, 1.00f);
 
-    bool shmReady   = shmConnected.load() && sharedData && sharedData->magic == 0xDEADF00D;
+    bool shmReady   = isShmReady();
     bool vmtApplied = shmReady && sharedData->hookApplied == 0xBEEF1234;
 
     static float fadeAlpha   = 0.0f;
@@ -1225,7 +1227,7 @@ void DrawMenu() {
 // ============================================================
 void onOverlayDraw(int screenW, int screenH) {
     // Gravar dimensoes como fallback SOMENTE se o hook ainda nao inicializou.
-    if (sharedData && shmConnected.load() && sharedData->screenW <= 0) {
+    if (isShmReady() && sharedData->screenW <= 0) {
         sharedData->screenW = screenW;
         sharedData->screenH = screenH;
     }
