@@ -292,7 +292,9 @@ static EGLBoolean hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     const bool inMatch = sharedData && sharedData->magic == 0xDEADF00D
                          && sharedData->playerCount > 0;
 
-    // Touch: triple-tap do menu precisa ser processado mesmo no fast-path
+    // ImGui exige NewFrame/Render em toda frame onde o backend está ativo.
+    // Pular isso no lobby (fast-path) quebrava o menu ao abrir (estado/input).
+
     int tevt = g_touchEvent.exchange(-1);
     float tx  = g_touchX.load();
     float ty  = g_touchY.load();
@@ -300,13 +302,7 @@ static EGLBoolean hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
         handleMenuToggle(tx, ty);
     }
 
-    bool menuOpen = g_menuOpen.load();
-
-    // Fast-path: key OK, menu fechado, fora de partida — sem ImGui/GL state churn.
-    // Reduz drasticamente assinatura de hook (glGet*, blend, ImGui) no lobby.
-    if (keyValid && !menuOpen && !inMatch) {
-        return orig_eglSwapBuffers(dpy, surface);
-    }
+    const bool menuOpen = g_menuOpen.load();
 
     ImGuiIO& io = ImGui::GetIO();
 
