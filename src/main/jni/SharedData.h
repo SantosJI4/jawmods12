@@ -62,6 +62,7 @@ struct SharedESPData {
     volatile int   triggerKey;            // Keycode do trigger (hold-to-aim)
     volatile int   triggerHeld;           // 1 = tecla trigger pressionada
     volatile int   magicBulletEnabled;    // Snap para cabeça no frame exato do disparo
+    volatile float aimbotPrediction;      // Previsão de movimento (ms à frente, 0=off)
 
     volatile int debugLastCall;     // Diagnóstico: último il2cpp call completado
     volatile int resetSelf;         // Overlay seta 1 → hook reseta cache do self player

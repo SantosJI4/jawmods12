@@ -600,6 +600,11 @@ static bool    g_aimbotHasLock       = false;     // true = aimbot travado num a
 static float   g_aimbotBestDist      = 1e9f;      // melhor candidato deste frame
 static bool    g_aimbotJustLocked    = false;     // true = primeiro frame de novo lock -> snap instantaneo
 static bool    g_wasFiring          = false;     // estado anterior de IsFiring (detectar borda de disparo)
+// Predicao de movimento (velocity prediction)
+static Vector3   g_predSmoothVel{};            // velocidade suavizada por EMA (m/ms)
+static Vector3   g_predPrevHeadPos{};          // posicao anterior da cabeca do alvo travado
+static long long g_predPrevTime    = 0;        // timestamp do frame anterior (ms)
+static long long g_frameCurrentMs  = 0;        // timestamp do frame atual (atualizado no newFrame)
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 // ============================================================
@@ -818,6 +823,7 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
         // Camera-moving aimbot REMOVIDO (v29).
         // aimbotHasTarget reflete se aimbot tem alvo para o HUD do overlay.
         sharedData->aimbotHasTarget = g_aimbotHasLock ? 1 : 0;
+        g_frameCurrentMs = nowMs; // atualiza timestamp do frame para predicao
 
         // Resetar candidatos para este frame
         g_aimBestScreenDist = 1e9f;
@@ -1014,11 +1020,40 @@ static void Hook_OnUpdate(void* self, void* methodInfo) {
                 float compareDist = isCurrent ? screenDist * 0.45f : screenDist;
                 if (compareDist < g_aimbotBestDist) {
                     bool isNew = (self != g_aimbotLockedTarget || !g_aimbotHasLock);
-                    g_aimbotBestDist      = compareDist;
-                    g_aimbotLockedTarget  = self;
-                    g_aimbotLockedHeadPos = aimbotHeadPos;
-                    g_aimbotHasLock       = true;
-                    if (isNew) g_aimbotJustLocked = true; // snap no novo alvo
+                    g_aimbotBestDist     = compareDist;
+                    g_aimbotLockedTarget = self;
+                    g_aimbotHasLock      = true;
+                    if (isNew) {
+                        // Novo alvo: resetar estado de predicao, snap imediato
+                        g_aimbotJustLocked  = true;
+                        g_predSmoothVel     = Vector3{0.0f, 0.0f, 0.0f};
+                        g_predPrevHeadPos   = aimbotHeadPos;
+                        g_predPrevTime      = g_frameCurrentMs;
+                        g_aimbotLockedHeadPos = aimbotHeadPos;
+                    } else {
+                        // Alvo atual: calcular velocidade suavizada (EMA alpha=0.4)
+                        float dtMs = (float)(g_frameCurrentMs - g_predPrevTime);
+                        if (dtMs > 0.5f && dtMs < 60.0f) {
+                            float vx = (aimbotHeadPos.x - g_predPrevHeadPos.x) / dtMs;
+                            float vy = (aimbotHeadPos.y - g_predPrevHeadPos.y) / dtMs;
+                            float vz = (aimbotHeadPos.z - g_predPrevHeadPos.z) / dtMs;
+                            const float alpha = 0.4f;
+                            g_predSmoothVel.x = g_predSmoothVel.x * (1.0f - alpha) + vx * alpha;
+                            g_predSmoothVel.y = g_predSmoothVel.y * (1.0f - alpha) + vy * alpha;
+                            g_predSmoothVel.z = g_predSmoothVel.z * (1.0f - alpha) + vz * alpha;
+                        }
+                        g_predPrevHeadPos = aimbotHeadPos;
+                        g_predPrevTime    = g_frameCurrentMs;
+                        // Aplicar predicao: pos_futura = pos_atual + vel * tempo_previsto
+                        float predMs = sharedData->aimbotPrediction;
+                        if (predMs > 0.0f && predMs <= 200.0f) {
+                            g_aimbotLockedHeadPos.x = aimbotHeadPos.x + g_predSmoothVel.x * predMs;
+                            g_aimbotLockedHeadPos.y = aimbotHeadPos.y + g_predSmoothVel.y * predMs;
+                            g_aimbotLockedHeadPos.z = aimbotHeadPos.z + g_predSmoothVel.z * predMs;
+                        } else {
+                            g_aimbotLockedHeadPos = aimbotHeadPos;
+                        }
+                    }
                 }
             }
         }

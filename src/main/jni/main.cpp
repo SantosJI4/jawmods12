@@ -146,6 +146,7 @@ static bool aimbotIgnoreKnocked = true;
 static bool aimbotThroughWalls  = false;
 static bool aimbotAlwaysTrack   = false;
 static bool magicBulletEnabled  = false;
+static float aimbotPrediction   = 0.0f;  // ms de previsao de movimento (0=off)
 static bool showFovCircle       = true;
 static int32_t triggerKey       = 0;
 
@@ -287,6 +288,7 @@ void DrawESP(int screenW, int screenH) {
     sharedData->aimbotAlwaysTrack     = aimbotAlwaysTrack ? 1 : 0;
     sharedData->triggerKey            = triggerKey;
     sharedData->magicBulletEnabled    = magicBulletEnabled ? 1 : 0;
+    sharedData->aimbotPrediction      = aimbotPrediction;
 
     if (!esp) return;
     if (sharedData->magic != 0xDEADF00D) return;
@@ -509,7 +511,7 @@ static void readHookLog() {
 // Config â€” persiste em /data/local/tmp/.jawmods_cfg
 // ============================================================
 #define JAW_CONFIG_PATH  "/data/local/tmp/.jawmods_cfg"
-#define JAW_CONFIG_MAGIC 0x4A41570Du  // "JAW" v13 - magic bullet
+#define JAW_CONFIG_MAGIC 0x4A41570Eu  // "JAW" v14 - movement prediction
 
 #pragma pack(push, 1)
 struct JawConfig {
@@ -524,6 +526,7 @@ struct JawConfig {
     int32_t  triggerKey;
     uint8_t  showFovCircle;
     uint8_t  magicBullet;
+    float    prediction;
 };
 #pragma pack(pop)
 
@@ -547,6 +550,7 @@ static void saveConfig() {
     c.triggerKey         = triggerKey;
     c.showFovCircle      = showFovCircle;
     c.magicBullet        = magicBulletEnabled;
+    c.prediction         = aimbotPrediction;
     int fd = open(JAW_CONFIG_PATH, O_CREAT | O_WRONLY | O_TRUNC, 0666);
     if (fd >= 0) { write(fd, &c, sizeof(c)); close(fd); }
 }
@@ -575,6 +579,7 @@ static void loadConfig() {
     triggerKey          = c.triggerKey;
     showFovCircle       = c.showFovCircle;
     magicBulletEnabled  = c.magicBullet;
+    aimbotPrediction    = c.prediction;
 }
 
 // ============================================================
@@ -1007,6 +1012,10 @@ void DrawMenu() {
         ToggleRow("Atravessar Paredes", &aimbotThroughWalls);
         ImGui::Spacing();
         ToggleRow("Magic Bullet", &magicBulletEnabled);
+        ImGui::Spacing();
+        ImGui::TextColored(cv4Dim, "Predicao de Movimento (ms)");
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 12.0f);
+        ImGui::SliderFloat("##apred", &aimbotPrediction, 0.0f, 150.0f, "%.0f ms");
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
