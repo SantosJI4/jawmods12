@@ -529,7 +529,13 @@ static uintptr_t g_il2cpp_base = 0;
 static void (*orig_OnUpdate)(void* self, void* methodInfo) = nullptr;
 
 // Shared memory
+// Em UNIFIED_BUILD: sharedData é global (main.cpp acessa via extern)
+// Em outros builds: static (visível só neste arquivo)
+#ifdef UNIFIED_BUILD
+SharedESPData* sharedData = nullptr;
+#else
 static SharedESPData* sharedData = nullptr;
+#endif
 static int shmFd = -1;
 
 // Frame sync

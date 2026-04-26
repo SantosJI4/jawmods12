@@ -176,7 +176,8 @@ UNIFIED_FILES += $(LOCAL_PATH)/egl_hook.cpp
 UNIFIED_FILES += $(LOCAL_PATH)/key_validator.cpp
 UNIFIED_FILES += $(LOCAL_PATH)/main.cpp
 UNIFIED_FILES += $(wildcard $(LOCAL_PATH)/src/ImGui/*.cpp*)
-UNIFIED_FILES += $(wildcard $(LOCAL_PATH)/src/ImGui/backends/*.cpp*)
+# Apenas opengl3 backend — imgui_impl_android.cpp NÃO é usado no EGL hook
+UNIFIED_FILES += $(LOCAL_PATH)/src/ImGui/backends/imgui_impl_opengl3.cpp
 
 LOCAL_SRC_FILES := $(UNIFIED_FILES:$(LOCAL_PATH)/%=%)
 LOCAL_STATIC_LIBRARIES := dobby
